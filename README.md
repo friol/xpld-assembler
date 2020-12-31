@@ -1,6 +1,6 @@
 # xpld-assembler
 
-This is the assembler for the XPLD project.
+This is the assembler for the [XPLD project](https://github.com/friol/xpld-runtime).
 
 You need Python 3.7 or better to use this one.
 
