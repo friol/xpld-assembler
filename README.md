@@ -1,6 +1,7 @@
 # xpld-assembler
 
-This is the assembler for the [XPLD project](https://github.com/friol/xpld-runtime).
+This is the assembler for the [XPLD project](https://github.com/friol/xpld-runtime).<br/>
+An assembler reads a source file and outputs a binary that you can then load in the computer.<br/>
 
 You need Python 3.7 or better to use this one.
 
