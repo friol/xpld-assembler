@@ -1,0 +1,809 @@
+
+#
+# XPLD kernal
+# friol 2k20
+#
+
+ORGCODE 0x0
+ORGDS 0x10000
+
+strSystemBootMsg01 ds "    XPLD computer 0.3 (c) friol 2o2o    "
+strSystemBootMsg02 ds "    1Mb RAM system"
+strReadyPrompt ds "READY."
+strLoadCommand ds "load"
+strRunCommand ds "run"
+strHelloCommand ds "hello"
+strDirCommand ds "dir"
+strProgramLoaded ds "Program loaded from d0:"
+strHelloMessage ds "Hello from XPLD system v0.3"
+strUnknownCommand ds "?Syntax error"
+strReadingDir ds "Reading directory of d0:"
+strVolumeName ds " BIG KINDA DISK            "
+strBlocksFree ds "13373 blocks free"
+strErrorLoadingFile ds "?Error loading file"
+
+#
+#
+#
+
+jmp @@main
+
+#
+# waitForRetrace
+# (c) friol 1999
+#
+
+.waitForRetrace:
+push r0
+@@wfrLoop:
+ld8 r0,[0x20000000]
+and r0,0x02
+cmp r0,0x02
+jnz @@wfrLoop
+pop r0
+rts
+
+#
+# creates a random number at each call
+# 0x005ffffc is seed&updated
+# r0 is mod
+# random number is returned in r15
+#
+
+.getRandomNumber:
+push r1
+push r2
+ld r1,[0x005ffffc]
+ld r2,[0x20010000]
+add r1,r2
+mul r1,0xf3f1df67
+mod r1,0xefcdef15
+ld32 [0x005ffffc],r1
+mod r1,r0
+ld r15,r1
+pop r2
+pop r1
+rts
+
+#
+# sub: output 0-terminated string to mode0 videoram
+# r0: ptr to string
+# r1: row
+# r2: col
+#
+
+.outputStringMode0:
+push r3
+push r4
+
+ld r4,0x10000000
+add r4,r2
+mul r1,40
+add r4,r1
+@@printstring:
+ld8 r3,[r0]
+cmp r3,0
+jnz @@printinner
+pop r4
+pop r3
+rts
+
+@@printinner:
+sub r3,0x20
+ld8 [r4],r3
+add r0,1
+add r4,1
+jmp @@printstring
+
+#
+# print system message
+#
+
+.printSystemMessage:
+
+ld8 [0x10001028],0xc0
+ld8 [0x10001029],0x80
+ld8 [0x1000102a],0xb0
+ld8 [0x1000102b],0xe0
+
+ld8 [0x1000104c],0xe0
+ld8 [0x1000104d],0xb0
+ld8 [0x1000104e],0x80
+ld8 [0x1000104f],0xc0
+
+ld r0,strSystemBootMsg01
+ld r1,1
+ld r2,0
+jsr outputStringMode0
+
+ld r0,strSystemBootMsg02
+ld r1,2
+ld r2,0
+jsr outputStringMode0
+rts
+
+#
+# output decimal number on screen
+# r3=number 0-255
+# r0=ptr to videoram
+#
+
+.outputDecimalNumber:
+
+push r1
+push r2
+push r4
+
+ld r4,r3
+mod r4,10
+add r0,2
+add r4,0x10
+ld8 [r0],r4
+
+sub r0,1
+
+ld r4,r3
+div r4,10
+mod r4,10
+add r4,0x10
+ld8 [r0],r4
+
+sub r0,1
+
+ld r4,r3
+div r4,100
+mod r4,10
+add r4,0x10
+ld8 [r0],r4
+
+pop r4
+pop r2
+pop r1
+rts
+
+#
+# compare string in r0 with working ram at 0x500028
+# r1=0 if strings match, r1=1 otherwise
+#
+
+.compareWorkingRamWithCommand:
+push r2
+push r3
+push r4
+
+ld r1,1
+ld r2,0x00500028
+@@compareCycle:
+ld8 r3,[r2]
+ld8 r4,[r0]
+add r3,32
+sub r3,r4
+cmp r3,0
+jnz @@endCompareStrings
+add r2,1
+add r0,1
+ld8 r3,[r0]
+cmp r3,0
+jnz @@compareCycle
+ld r1,0
+@@endCompareStrings:
+
+pop r4
+pop r3
+pop r2
+rts
+
+#
+# tokenize scanLine
+# tokenize string at 0x00500000-0x00500027
+# to lines from 0x00500028
+#
+
+.tokenizeScanline:
+push r0
+push r1
+push r2
+push r3
+push r4
+
+ld r0,0x00500000
+ld r2,0x00500000
+ld r4,1
+
+@@tokenizeCycle:
+ld r3,0x28
+mul r3,r4
+add r3,0x00500000
+
+@@innerTokenizer:
+ld8 r1,[r0]
+cmp r1,0
+jz @@nextToken
+ld8 [r3],r1
+add r3,1
+add r0,1
+jmp @@innerTokenizer
+
+@@nextToken:
+ld8 [r3],0
+add r4,1
+add r0,1
+cmp r0,0x00500027
+jnz @@tokenizeCycle
+
+@@endScanning:
+ld8 [r3],0
+
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# identify command line command
+# returns identified command in r15
+# or 0 if command wasn't identified
+#
+
+.identifyCommand:
+
+push r0
+push r1
+push r3
+push r4
+push r5
+
+ld r15,0
+
+ld8 r0,[0x20010011]
+mul r0,40
+
+# read line at r0 and store it in working RAM
+
+ld r3,0x00500000
+ld r4,0x10000000
+add r4,r0
+
+@@scanLine:
+ld8 r5,[r4]
+ld8 [r3],r5
+add r3,1
+add r4,1
+cmp r3,0x00500028
+jnz @@scanLine
+
+# tokenize scanLine
+jsr tokenizeScanline
+
+# compare line with fixed strings
+
+ld r0,strLoadCommand
+jsr compareWorkingRamWithCommand
+cmp r1,0
+jnz @@testForRunCommand
+ld r15,1
+pop r5
+pop r4
+pop r3
+pop r1
+pop r0
+rts
+
+@@testForRunCommand:
+ld r0,strRunCommand
+jsr compareWorkingRamWithCommand
+cmp r1,0
+jnz @@testForHelloCommand
+ld r15,2
+pop r5
+pop r4
+pop r3
+pop r1
+pop r0
+rts
+
+@@testForHelloCommand:
+ld r0,strHelloCommand
+jsr compareWorkingRamWithCommand
+cmp r1,0
+jnz @@testForDirCommand
+ld r15,3
+pop r5
+pop r4
+pop r3
+pop r1
+pop r0
+rts
+
+@@testForDirCommand:
+ld r0,strDirCommand
+jsr compareWorkingRamWithCommand
+cmp r1,0
+jnz @@noCommandIdentified
+ld r15,4
+pop r5
+pop r4
+pop r3
+pop r1
+pop r0
+rts
+
+@@noCommandIdentified:
+pop r5
+pop r4
+pop r3
+pop r1
+pop r0
+rts
+
+#
+# load cmd
+#
+
+.executeLoadCommand:
+
+push r0
+push r1
+push r2
+
+# run load command
+# we expect a zero terminated string at 0x00500050
+# with the file name
+
+ld32 [0x20020001],0x00500050
+ld8 [0x20020000],2
+
+# check for load success
+# TODO
+
+# write "program loaded"
+
+ld8 r2,[0x20010011]
+add r2,2
+
+ld r0,strProgramLoaded
+ld r1,r2
+ld r2,0
+jsr outputStringMode0
+
+ld8 r1,[0x20010011]
+add r1,3
+ld r2,0
+jsr printReadyPrompt
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# execute directory command
+#
+
+.executeDirCommand:
+
+push r0
+push r1
+push r2
+push r3
+push r4
+
+ld8 r2,[0x20010011]
+add r2,2
+
+ld r0,strReadingDir
+ld r1,r2
+ld r2,0
+jsr outputStringMode0
+
+# invoke directory command
+ld8 [0x20020000],1
+
+# decode and write directory listing result
+ld8 r2,[0x20010011]
+add r2,3
+mul r2,40
+ld r0,0x10000000
+add r0,r2
+
+ld r1,0x10001000
+add r1,r2
+
+# write 0
+ld8 [r0],16
+add r0,2
+add r1,2
+
+ld r3,strVolumeName
+ld8 r4,[r3]
+@@volumeNameCycle:
+sub r4,32
+ld8 [r0],r4
+ld8 [r1],0x45
+add r0,1
+add r1,1
+add r3,1
+ld8 r4,[r3]
+cmp r4,0
+jnz @@volumeNameCycle
+
+# entries
+ld8 r2,[0x20010011]
+add r2,4
+
+ld8 [0x20010011],r2
+
+mul r2,40
+ld r0,0x10000000
+add r0,r2
+
+ld r1,0x00500000
+
+# number of files is stored in r15, the fluffy register
+ld8 r15,[r1]
+
+
+@@writeDirEntries:
+add r1,1
+
+ld8 r3,[r1]
+jsr outputDecimalNumber
+
+add r0,4
+# open quote
+ld8 [r0],2
+add r0,1
+
+add r1,1
+ld8 r3,[r1]
+@@outputFileName:
+sub r3,0x20
+ld8 [r0],r3
+add r0,1
+add r1,1
+ld8 r3,[r1]
+cmp r3,0
+jnz @@outputFileName
+
+# close quote
+ld8 [r0],2
+
+# next line
+ld8 r2,[0x20010011]
+add r2,1
+ld8 [0x20010011],r2
+ld8 [0x20010010],0
+
+# reposition write on videoram cursor
+mul r2,40
+ld r0,0x10000000
+add r0,r2
+
+sub r15,1
+cmp r15,0
+jnz @@writeDirEntries
+
+# next line
+ld8 r2,[0x20010011]
+add r2,1
+ld8 [0x20010011],r2
+ld8 [0x20010010],0
+
+# write blocks free
+ld r0,strBlocksFree
+sub r2,1
+ld r1,r2
+ld r2,0
+jsr outputStringMode0
+
+ld8 r2,[0x20010011]
+add r2,1
+ld8 [0x20010011],r2
+ld8 [0x20010010],0
+
+ld r1,r2
+ld r2,0
+jsr printReadyPrompt
+
+#endofthelongestprocintheworld
+
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# hello cmd
+#
+
+.executeHelloCommand:
+
+push r0
+push r1
+push r2
+
+ld8 r2,[0x20010011]
+add r2,2
+
+ld r0,strHelloMessage
+ld r1,r2
+ld r2,0
+jsr outputStringMode0
+
+ld8 r1,[0x20010011]
+add r1,3
+ld r2,0
+jsr printReadyPrompt
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# RUN command
+#
+
+.executeRunCommand:
+
+jsr 0x00600000
+
+# todo: print prompt
+
+rts
+
+#
+# generic syntax error
+#
+
+.syntaxError:
+
+push r0
+push r1
+push r2
+
+ld8 r2,[0x20010011]
+add r2,2
+
+ld r0,strUnknownCommand
+ld r1,r2
+ld r2,0
+jsr outputStringMode0
+
+ld8 r1,[0x20010011]
+add r1,3
+ld r2,0
+jsr printReadyPrompt
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# process backspace key
+#
+
+.processBackspace:
+
+push r0
+push r1
+push r2
+
+ld8 r1,[0x20010010]
+ld8 r0,[0x20010011]
+
+cmp r1,0
+jz @@dontBackspace
+
+sub r1,1
+ld r2,0x10000000
+mul r0,40
+add r2,r0
+add r2,r1
+
+ld8 [r2],0
+
+ld8 r1,[0x20010010]
+sub r1,1
+ld8 [0x20010010],r1
+
+@@dontBackspace:
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# process key pressed
+# r0 is key pressed
+#
+
+.processKeyPress:
+
+push r1
+push r2
+push r3
+
+# backspace
+cmp r0,255
+jnz @@keypressProcessReturn
+jsr processBackspace
+pop r3
+pop r2
+pop r1
+rts
+
+@@keypressProcessReturn:
+# return: process token
+cmp r0,13
+jnz @@normalKeyProcess
+
+jsr identifyCommand
+cmp r15,1
+jz @@execLoadCommand
+cmp r15,2
+jz @@execRunCommand
+cmp r15,3
+jz @@execHelloCommand
+cmp r15,4
+jz @@execDirCommand
+jmp @@unknownCommand
+
+@@execLoadCommand:
+jsr executeLoadCommand
+pop r3
+pop r2
+pop r1
+rts
+@@execRunCommand:
+jsr executeRunCommand
+pop r3
+pop r2
+pop r1
+rts
+@@execHelloCommand:
+jsr executeHelloCommand
+pop r3
+pop r2
+pop r1
+rts
+@@execDirCommand:
+jsr executeDirCommand
+pop r3
+pop r2
+pop r1
+rts
+
+@@unknownCommand:
+jsr syntaxError
+pop r3
+pop r2
+pop r1
+rts
+
+# normal keys: write char to screen and increment cursor position
+
+@@normalKeyProcess:
+ld8 r1,[0x20010010]
+ld8 r2,[0x20010011]
+
+ld r3,r2
+mul r3,40
+add r3,r1
+add r3,0x10000000
+sub r0,32
+ld8 [r3],r0
+
+add r1,1
+ld8 [0x20010010],r1
+
+pop r3
+pop r2
+pop r1
+rts
+
+#
+#
+#
+
+.keyboardFetch:
+push r0
+
+ld8 r0,[0x20010001]
+cmp r0,0
+jz @@keyFetchEnd
+
+#process key pressed
+jsr processKeyPress
+
+@@keyFetchEnd:
+
+pop r0
+rts
+
+#
+# print READY. prompt and place hardware cursor below
+# r1=y
+# r2=x
+#
+
+.printReadyPrompt:
+push r3
+ld r0,strReadyPrompt
+ld r3,r1
+add r3,1
+jsr outputStringMode0
+ld8 [0x20010010],0
+ld8 [0x20010011],r3
+pop r3
+rts
+
+#
+# power-on cycle
+#
+
+.powerOnCharCycle:
+
+@@fillTest:
+ld r0,0x13
+ld r1,0
+ld r2,0x10000000
+
+@@fillScreenCycle:
+ld r3,2
+
+@@wfrRepeat:
+jsr waitForRetrace
+sub r3,1
+cmp r3,0
+jnz @@wfrRepeat
+
+ld8 [r2],r0
+add r1,1
+add r2,1
+cmp r1,1200
+jnz @@fillScreenCycle
+ld r1,0
+ld r2,0x10000000
+sub r0,1
+cmp r0,0x10
+jnz @@fillScreenCycle
+
+ld r0,0
+ld r1,0
+ld r2,0x10000000
+@@fillScreenCycle2:
+jsr waitForRetrace
+ld8 [r2],r0
+add r1,1
+add r2,1
+cmp r1,1200
+jnz @@fillScreenCycle2
+
+rts
+
+#
+# main
+#
+
+@@main:
+ld8 [0x20000001],0
+
+# quick power-on cycle
+#jsr powerOnCharCycle
+
+jsr printSystemMessage
+ld r1,4
+ld r2,0
+jsr printReadyPrompt
+
+@@mainLoop:
+jsr keyboardFetch
+jmp @@mainLoop
+
+hlt

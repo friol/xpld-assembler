@@ -1,0 +1,84 @@
+#
+# print chr$ maze
+#
+
+ORGCODE 0x00600000
+ORGDS 0x00610000
+
+ld8 [0x10000000],0x10
+jmp @@mazeProgram
+
+#
+# waitForRetrace
+# (c) friol 1999
+#
+
+.waitForRetrace:
+push r0
+@@wfrLoop:
+ld8 r0,[0x20000000]
+and r0,0x02
+cmp r0,0x02
+jnz @@wfrLoop
+pop r0
+rts
+
+#
+# creates a random number at each call
+# 0x005ffffc is seed&updated
+# r0 is mod
+# random number is returned in r15
+#
+
+.getRandomNumber:
+push r1
+push r2
+ld r1,[0x005ffffc]
+ld r2,[0x20010000]
+add r1,r2
+mul r1,0xf3f1df67
+mod r1,0xefcdef15
+ld32 [0x005ffffc],r1
+mod r1,r0
+ld r15,r1
+pop r2
+pop r1
+rts
+
+#
+
+@@mazeProgram:
+
+ld r5,0
+ld r6,0x80
+
+ld8 [0x20010010],0
+ld8 [0x20010011],0
+
+ld r2,0x10000000
+ld r4,0x10001000
+
+@@execRunMainCycle:
+jsr waitForRetrace
+ld r0,2
+jsr getRandomNumber
+ld r1,r15
+cmp r1,0
+jnz @@otherChar
+ld r3,15
+jmp @@writeOnScreen
+@@otherChar:
+ld r3,60
+@@writeOnScreen:
+ld8 [r2],r3
+
+add r5,1
+and r5,0x0f
+add r5,r6
+ld8 [r4],r5
+add r4,1
+add r2,1
+cmp r2,0x100004b0
+jnz @@execRunMainCycle
+
+hlt
