@@ -8,6 +8,9 @@ import array;
 import struct;
 from lark import Lark,Token,Tree;
 
+class genericException(Exception):
+    pass;
+
 class megaParser:
 
     def __init__(self):
@@ -774,12 +777,17 @@ class megaParser:
 
     def implantJumpAddress(self,codeElement,labelList,outarr):
 
+        implanted=False;
         for lab in labelList:
             if lab[0]==codeElement[1]:
                 pointInCode=codeElement[0];
                 realAddress=lab[1]+self.codeBaseAddress;
 
                 self.putRealAddress(outarr,pointInCode,realAddress);
+                implanted=True;
+
+        if not implanted:
+            raise genericException("Error: couldn't find address for label "+str(codeElement));
 
 
     #
