@@ -1,0 +1,578 @@
+
+#
+# arkanoid game 2021
+# 0x00500000 palette xpos
+# 0x00500001 ball xpos
+# 0x00500002 ball ypos
+# 0x00500003 ball xinc
+# 0x00500004 ball yinc
+# 0x00500005 lives
+# 0x00500006 score
+# 0x00500007 game mode: 0: normal play, 1 ready? prompt, 2 life lost
+#
+
+ORGCODE 0x0
+ORGDS 0x10000
+
+strLives ds "Lives"
+strScore ds "Score"
+
+data2021bricks db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,0,1,1,0,0,1,1,0,1,1,1,1,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,0,1,1,0,0,1,1,0,1,1,1,1,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+dataReady db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,1,0,0,1,1,1,1,0,0,1,1,0,0,1,1,1,0,0,1,0,0,1,0,0,1,1,1,0,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,1,1,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,1,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,1,1,0,0,1,1,1,1,0,1,1,1,1,0,1,0,0,1,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,1,0,0,0,0,1,1,1,1,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,1,1,1,0,1,0,0,1,0,1,1,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+
+#
+
+jmp @@main
+
+#
+# waitForRetrace
+# (c) friol 1999
+#
+
+.waitForRetrace:
+push r0
+@@wfrLoop:
+ld8 r0,[0x20000000]
+and r0,0x02
+cmp r0,0x02
+jnz @@wfrLoop
+pop r0
+rts
+
+#
+
+.drawReadyScreen:
+push r0
+push r1
+push r2
+push r3
+
+ld r0,dataReady
+ld r1,0x10000000
+ld r2,0
+
+@@drawReadyInner:
+ld8 r3,[r0]
+cmp r3,1
+jz @@drawReadyWr
+ld8 [r1],0x0
+jmp @@drawReadyStep
+
+@@drawReadyWr:
+ld8 [r1],3
+
+@@drawReadyStep:
+add r0,1
+add r1,1
+add r2,1
+cmp r2,1200
+jnz @@drawReadyInner
+
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+#
+#
+
+.redrawScreen:
+
+push r0
+push r1
+push r2
+push r3
+push r4
+push r5
+
+ld r0,0x10000000
+ld r1,0
+ld r4,0
+ld r5,0
+@@clrscrInner:
+ld r2,data2021bricks
+add r2,r1
+ld8 r3,[r2]
+cmp r3,1
+jz @@drawHashChar
+
+ld8 [r0],0x0
+add r0,0x1000
+ld8 [r0],0x54
+sub r0,0x1000
+
+jmp @@continueClearScreen
+@@drawHashChar:
+ld8 [r0],0x3
+add r0,0x1000
+add r5,0x00
+ld8 [r0],r5
+sub r5,0x00
+sub r0,0x1000
+@@continueClearScreen:
+add r4,1
+cmp r4,40
+jnz @@noColorChange
+ld r4,0
+add r5,1
+and r5,0x0f
+@@noColorChange:
+add r0,1
+add r1,1
+cmp r1,1200
+jnz @@clrscrInner
+
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+
+rts
+
+#
+#
+#
+
+.drawPalette:
+
+push r0
+push r1
+push r2
+
+ld r0,0x10000000
+add r0,1160
+ld8 r1,[0x500000]
+add r0,r1
+
+ld r2,8
+@@drawPaletteInner:
+ld8 [r0],6
+add r0,1
+sub r2,1
+cmp r2,0
+jnz @@drawPaletteInner
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# draw ball
+#
+
+.drawBall:
+push r0
+push r1
+
+ld8 r0,[0x500002]
+mul r0,40
+ld8 r1,[0x500001]
+add r0,r1
+add r0,0x10000000
+
+ld8 [r0],0x10
+
+pop r1
+pop r0
+rts
+
+#
+# sub: output 0-terminated string to mode0 videoram
+# r0: ptr to string
+# r1: row
+# r2: col
+#
+
+.outputStringMode0:
+push r3
+push r4
+
+ld r4,0x10000000
+add r4,r2
+mul r1,40
+add r4,r1
+@@printstring:
+ld8 r3,[r0]
+cmp r3,0
+jnz @@printinner
+pop r4
+pop r3
+rts
+
+@@printinner:
+sub r3,0x20
+ld8 [r4],r3
+add r0,1
+add r4,1
+jmp @@printstring
+rts
+
+#
+# display hud
+#
+
+.displayHUD:
+
+push r0
+push r1
+push r2
+
+ld r0,strScore
+ld r1,0
+ld r2,4
+jsr outputStringMode0
+
+ld8 r0,[0x500006]
+ld r15,0
+jsr outputDecimalNumber2
+
+ld r0,strLives
+ld r1,0
+ld r2,30
+jsr outputStringMode0
+
+ld8 r0,[0x00500005]
+add r0,0x10
+ld8 [0x10000024],r0
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# output decimal number to screen
+# the return
+# r0=number to print
+# r15=row
+# (uses 0x501000 ram as buffer)
+#
+
+.outputDecimalNumber2:
+
+push r1
+push r2
+push r3
+push r4
+push r5
+
+ld r2,0x00501000
+ld r3,1
+ld r4,0
+
+@@decNumCycle:
+ld r1,r0
+div r1,r3
+cmp r1,0
+jz @@doneOutputDecNum
+mod r1,10
+add r1,0x10
+ld8 [r2],r1
+add r2,1
+mul r3,10
+add r4,1
+jmp @@decNumCycle
+
+@@doneOutputDecNum:
+
+sub r2,1
+ld r1,r15
+mul r1,40
+add r1,0x1000000a
+
+@@writeOnScreenNumCycle:
+ld8 r5,[r2]
+ld8 [r1],r5
+add r1,1
+sub r2,1
+sub r4,1
+cmp r4,0
+jnz @@writeOnScreenNumCycle
+
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+rts
+
+#
+# paddle-ball collision sound effect
+#
+
+.paddleBallSound:
+
+ld32 [0x30000007],2500
+ld8 [0x30000006],0xff
+ld32 [0x30000005],10
+ld8 [0x30000000],9
+
+rts
+
+#
+# paddle-wall collision sound
+#
+
+.paddleWallSound:
+
+ld32 [0x30000007],2500
+ld8 [0x30000006],0xff
+ld32 [0x30000005],5
+ld8 [0x30000000],9
+
+rts
+
+
+#
+# update ball pos
+#
+
+.updateBall:
+push r0
+push r1
+push r2
+push r3
+push r4
+push r5
+
+ld8 r0,[0x500001]
+ld8 r1,[0x500002]
+ld8 r2,[0x500003]
+ld8 r3,[0x500004]
+
+cmp r0,38
+jz @@checkRight
+cmp r0,1
+jz @@checkLeft
+cmp r1,28
+jz @@checkBottom
+cmp r1,1
+jz @@checkTop
+
+@@normalUpdateBall:
+add r0,r2
+add r1,r3
+ld8 [0x500001],r0
+ld8 [0x500002],r1
+
+# delete eventual bricks
+and r1,0xff
+and r0,0xff
+mul r1,40
+add r0,r1
+ld r2,data2021bricks
+add r2,r0
+ld8 r1,[r2]
+cmp r1,1
+jnz @@noBricksThere
+ld8 [r2],0
+
+# update Score
+ld8 r3,[0x500006]
+add r3,1
+ld8 [0x500006],r3
+
+@@noBricksThere:
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+@@checkRight:
+cmp r2,1
+jz @@bounceRight
+jmp @@normalUpdateBall
+
+@@checkLeft:
+cmp r2,0xff
+jz @@bounceLeft
+jmp @@normalUpdateBall
+
+@@checkTop:
+cmp r3,0xff
+jz @@bounceTop
+jmp @@normalUpdateBall
+
+@@checkBottom:
+cmp r3,1
+jz @@bounceBottom
+jmp @@normalUpdateBall
+
+
+@@bounceRight:
+jsr paddleWallSound
+ld r2,0xff
+jmp @@endUpdateBall
+
+@@bounceLeft:
+jsr paddleWallSound
+ld r2,1
+jmp @@endUpdateBall
+
+@@bounceTop:
+jsr paddleWallSound
+ld r3,1
+jmp @@endUpdateBall
+
+@@bounceBottom:
+
+# check if we're hitting the paddle or not
+
+ld8 r4,[0x500002]
+add r4,1
+mul r4,40
+ld8 r5,[0x500001]
+add r4,r5
+add r4,1
+add r4,0x10000000
+
+ld8 r5,[r4]
+cmp r5,6
+jz @@paddleWasHit
+
+# switch to mode 2, life lost
+ld8 [0x00500007],2
+ld8 r0,[0x500001]
+ld8 r1,[0x500002]
+ld8 r2,[0x500003]
+ld8 r3,[0x500004]
+add r0,r2
+add r1,r3
+ld8 [0x500001],r0
+ld8 [0x500002],r1
+jmp @@noBricksThere
+
+
+@@paddleWasHit:
+jsr paddleBallSound
+ld r3,0xff
+jmp @@endUpdateBall
+
+@@endUpdateBall:
+ld8 [0x500003],r2
+ld8 [0x500004],r3
+jmp @@normalUpdateBall
+
+rts
+
+#
+
+.processKeyboardReadyScreen:
+push r0
+
+ld8 r0,[0x20010001]
+cmp r0,115
+jz @@spressed
+pop r0
+rts
+
+@@spressed:
+ld8 [0x00500007],0
+
+pop r0
+rts
+
+.processKeyboard:
+push r0
+
+ld8 r0,[0x20010001]
+cmp r0,97 
+jz @@apressed
+cmp r0,100
+jz @@dpressed
+jmp @@nomove
+
+@@apressed:
+# decrement palette posx
+ld8 r0,[0x00500000]
+cmp r0,0
+jz @@nomove
+sub r0,1
+ld8 [0x00500000],r0
+pop r0
+rts
+
+@@dpressed:
+# increment palette posx
+ld8 r0,[0x00500000]
+cmp r0,32
+jz @@nomove
+add r0,1
+ld8 [0x00500000],r0
+pop r0
+rts
+
+@@nomove:
+pop r0
+rts
+
+#
+# main
+#
+
+@@main:
+
+ld8 [0x20000001],0
+
+# palette initial xpos
+ld8 [0x00500000],15
+
+# ball initial xpos, ypos, dirx, diry
+ld8 [0x00500001],12
+ld8 [0x00500002],22
+ld8 [0x00500003],1
+ld8 [0x00500004],1
+
+# lives 
+ld8 [0x00500005],1
+# score
+ld8 [0x00500006],1
+# game mode
+ld8 [0x00500007],1
+
+ld r14,0
+@@mainLoop:
+ld8 r0,[0x00500007]
+cmp r0,0
+jz @@normalGameLoop
+cmp r0,1
+jz @@readyScreenLoop
+cmp r0,2
+jz @@lifeLostLoop
+
+@@readyScreenLoop:
+jsr drawReadyScreen
+jsr processKeyboardReadyScreen
+jmp @@mainLoop
+
+@@normalGameLoop:
+jsr waitForRetrace
+jsr processKeyboard
+jsr redrawScreen
+jsr displayHUD
+jsr drawPalette
+jsr drawBall
+add r14,1
+cmp r14,5
+jnz @@mainLoop
+jsr updateBall
+ld r14,0
+jmp @@mainLoop
+
+@@lifeLostLoop:
+jsr waitForRetrace
+jsr redrawScreen
+jsr displayHUD
+jsr drawPalette
+jsr drawBall
+jmp @@mainLoop
+
+hlt
