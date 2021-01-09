@@ -78,7 +78,7 @@ class megaParser:
         | ESCAPED_STRING
 
         QUOTES: "\\""
-        _STRING_INNER: /[a-zA-Z0-9\.()*\?: ]+/
+        _STRING_INNER: /[a-zA-Z0-9\.()*\?:\-# ]+/
         ESCAPED_STRING : QUOTES _STRING_INNER QUOTES
 
         command: NOP_INSTR
@@ -518,15 +518,20 @@ class megaParser:
         self.codePointer+=1;
 
         # spit out arguments
-        if i2.children[0].type in ["DECIMALNUMBER","HEXNUMBER"]:
+        if i2.children[0].type in ["DECIMALNUMBER","HEXNUMBER","EQUVARIABLE"]:
+
             finalVal=0;
-            val=i2.children[0];
+
+            if i2.children[0].type=="EQUVARIABLE":
+                val=self.getEquvariableValue(i2.children[0]);
+            else:
+                val=i2.children[0];
+
             try:
                 if val[0:2]=="0x":
                     finalVal=int(val,16);
                 else:
                     finalVal=int(val);
-                #print("Spitting out 32bit value for "+str(finalVal));
             except:
                 print("Unable to parse as number value ["+val+"]");
                 return False;

@@ -1,0 +1,686 @@
+
+#
+# xpld tracker v0.1
+# music!
+# A-4--ff 
+# B-4----
+#
+# pattern format:
+# note: 1 byte 0-89, 255: no note, 254: break note
+# volume: 1 byte
+# future use: 1 byte
+# future use: 1 byte
+#
+# pattern 0 starts at 0x00501000
+# 0x00500000: num patterns (byte)
+# 0x00500001: current pattern (byte)
+# 0x00500002: current column/chan
+# 0x00500003: current octave
+# 0x00500004: tracker status: 0 stopped, 1 playing current pattern
+# 0x00500005: current playing row
+# 0x00500006: (32-bit) ticks counter
+#
+
+ORGCODE 0x0
+ORGDS 0x10000
+
+?ROWSPERPATTERN equ 64
+?SCREENROWS equ 30
+
+strTrackerName ds "XPLTracker v0.1"
+#                C  C#  D   D#  E   F   F#  G   G#  A   A#  B   C
+dataPianoKeys db 97,119,115,101,100,102,116,103,121,104,117,106,107
+strPatternNotes ds "C-0C#0D-0D#0E-0F-0F#0G-0G#0A-0A#0B-0C-1"
+
+dataFrequencyTable dd 1635,1732,1836,1945,2060,2183,2313,2450,2596,2750,2914,3087,3270,3465,3671,3889,4121,4366,4625,4900,5192,5500,5827,6174,6541,6930,7342,7779,8241,8731,9250,9800,10383,11001,11655,12348,13082,13860,14684,15557,16482,17462,18501,19601,20766,22001,23309,24696,26164,27720,29368,31114,32965,34925,37001,39202,41533,44002,46619,49391,52328,55440,58736,62229,65929,69849,74003,78403,83066,88005,93238,98782,104656,110879,117472,124458,131858,139699,148006,156807,166131,176010,186476,197564,209312,221758,234944,248915,263717,279398,296012,313614,332262,352019,372952,395128
+
+#
+#
+#
+
+jmp @@main
+
+#
+# clear screen and attributes, set cursor in upper left corner
+#
+
+.generalInit:
+push r0
+
+ld8 [0x20010010],1
+ld8 [0x20010011],1
+
+ld r0,0x10000000
+@@clearAll:
+ld8 [r0],0
+add r0,0x1000
+ld8 [r0],0x54
+sub r0,0x1000
+add r0,1
+cmp r0,0x100004af
+jnz @@clearAll
+
+pop r0
+rts
+
+#
+# sub: output 0-terminated string to mode0 videoram
+# r0: ptr to string
+# r1: row
+# r2: col
+#
+
+.outputStringMode0:
+push r3
+push r4
+
+ld r4,0x10000000
+add r4,r2
+mul r1,40
+add r4,r1
+@@printstring:
+ld8 r3,[r0]
+cmp r3,0
+jnz @@printinner
+pop r4
+pop r3
+rts
+
+@@printinner:
+sub r3,0x20
+ld8 [r4],r3
+add r0,1
+add r4,1
+jmp @@printstring
+rts
+
+#
+#
+#
+
+.drawTrackerInfo:
+push r0
+push r1
+push r2
+
+ld r0,strTrackerName
+ld r1,0
+ld r2,0
+jsr outputStringMode0
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# drawVolumeForChan
+# r1 screen pointer
+#
+
+.drawVolumeForChan:
+
+ld8 [r1],14
+add r1,1
+ld8 [r1],14
+add r1,1
+
+rts
+
+#
+# r1=screen pointer
+# r2=note num
+
+.drawNoteInPattern:
+
+push r3
+push r4
+push r5
+
+ld r5,r2
+mod r2,12
+ld r3,strPatternNotes
+mul r2,3
+add r3,r2
+ld8 r4,[r3]
+
+sub r4,32
+ld8 [r1],r4
+add r1,1
+add r3,1
+ld8 r4,[r3]
+
+sub r4,32
+ld8 [r1],r4
+add r1,1
+add r3,1
+ld8 r4,[r3]
+
+# draw octave num
+ld r4,r5
+div r4,12
+add r4,16
+ld8 [r1],r4
+add r1,1
+
+pop r5
+pop r4
+pop r3
+rts
+
+#
+# decodeAndDrawChan
+# r1 screen pointer
+# r0 pattern data pointer
+#
+
+.decodeAndDrawChan:
+push r2
+
+ld8 r2,[r0]
+add r0,1
+cmp r2,255
+jz @@drawEmptyNote
+
+# draw note
+jsr drawNoteInPattern
+jmp @@drawSeparator
+
+@@drawEmptyNote:
+ld8 [r1],13
+add r1,1
+ld8 [r1],13
+add r1,1
+ld8 [r1],13
+add r1,1
+
+@@drawSeparator:
+# draw two -- (separator)
+ld8 [r1],13
+add r1,1
+ld8 [r1],13
+add r1,1
+
+# draw volume
+ld8 r2,[r0]
+add r0,1
+jsr drawVolumeForChan
+
+# read unused bytes
+ld8 r2,[r0]
+add r0,1
+ld8 r2,[r0]
+add r0,1
+
+# channel done
+
+pop r2
+rts
+
+#
+# draw current pattern 
+# A-4--ff 
+# B-4----
+#
+
+.drawPatternPanel:
+push r0
+push r1
+push r2
+push r4
+
+ld r0,0x00501000
+ld r1,?ROWSPERPATTERN
+mul r1,3
+mul r1,4
+ld8 r2,[0x00500001]
+mul r2,r1
+add r0,r2
+
+# r0 now points to the pattern data
+
+ld r1,0x10000029
+ld r4,?SCREENROWS
+
+@@drawPatternCycle:
+ld r2,3
+@@drawRowCycle:
+jsr decodeAndDrawChan
+
+# draw space between chans
+ld8 [r1],0
+add r1,1
+ld8 [r1],0
+add r1,1
+
+sub r2,1
+cmp r2,0
+jnz @@drawRowCycle
+
+# go to next line on screen
+add r1,13
+
+sub r4,1
+cmp r4,0
+jnz @@drawPatternCycle
+
+# if playing, highlight row playing
+ld8 r0,[0x00500004]
+cmp r0,0
+jz @@noHighlight
+
+ld r0,0x10001028
+ld8 r1,[0x00500005]
+add r1,1
+ld r2,1
+
+@@normalRowCycle:
+ld r4,0x1b
+@@highlightRowCycle:
+cmp r2,r1
+jnz @@normalRow
+ld8 [r0],0x45
+jmp @@continueHighlightCycle
+@@normalRow:
+ld8 [r0],0x54
+@@continueHighlightCycle:
+add r0,1
+sub r4,1
+cmp r4,0
+jnz @@highlightRowCycle
+add r0,0xd
+add r2,1
+cmp r2,?SCREENROWS
+jnz @@normalRowCycle
+
+
+@@noHighlight:
+pop r4
+pop r2
+pop r1
+pop r0
+rts
+
+#
+#
+#
+
+.drawPatternSubdiv:
+push r0
+push r1
+
+ld r0,0x10000028
+ld r1,4
+
+@@drawDotsSub:
+ld8 [r0],14
+add r0,0xa0
+sub r1,1
+cmp r1,0
+jnz @@drawDotsSub
+
+pop r1
+pop r0
+rts
+
+
+#
+# draw screen
+#
+
+.drawScreen:
+
+jsr drawTrackerInfo
+jsr drawPatternPanel
+jsr drawPatternSubdiv
+
+rts
+
+#
+#
+#
+
+.playCurrentRow:
+push r0
+push r1
+push r2
+
+ld8 r0,[0x00500004]
+cmp r0,1
+jnz @@exitPlayUpdate
+
+ld r0,[0x00500006]
+cmp r0,0
+jnz @@exitPlayUpdate
+
+ld8 r0,[0x00500005]
+ld r1,0x00501000
+mul r0,12
+add r1,r0
+ld8 r2,[r1]
+
+ld r0,dataFrequencyTable
+mul r2,4
+add r0,r2
+ld32 r2,[r0]
+div r2,100
+
+ld32 [0x30000007],2500
+ld8 [0x30000006],0xff
+ld32 [0x30000005],r2
+ld8 [0x30000000],9
+
+@@exitPlayUpdate:
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# incrementTicksIfPlaying
+#
+
+.incrementTicksIfPlaying:
+push r0
+push r1
+
+ld8 r0,[0x00500004]
+cmp r0,1
+jnz @@notPlayingNoIncrement
+
+ld r0,[0x00500006]
+add r0,1
+cmp r0,1024
+jnz @@justStoreTicks
+
+# time to change row
+ld r0,0
+ld8 r1,[0x00500005]
+add r1,1
+and r1,0x3f
+ld8 [0x00500005],r1
+
+@@justStoreTicks:
+ld32 [0x00500006],r0
+
+@@notPlayingNoIncrement:
+pop r1
+pop r0
+rts
+
+#
+# init a blank pattern
+# r0=pattern num
+#
+
+.initBlankPattern:
+push r1
+push r2
+push r3
+
+ld r1,0x00501000
+mul r0,?ROWSPERPATTERN
+mul r0,3 
+add r1,r0
+
+ld r2,?ROWSPERPATTERN
+mul r2,3
+@@fillPatternData:
+ld r3,3
+@@fillRowData:
+ld8 [r1],255
+add r1,1
+ld8 [r1],0xff
+add r1,1
+ld8 [r1],0
+add r1,1
+ld8 [r1],0
+add r1,1
+
+sub r3,1
+cmp r3,0
+jnz @@fillRowData
+
+sub r2,1
+cmp r2,0
+jnz @@fillPatternData
+
+pop r3
+pop r2
+pop r1
+rts
+
+#
+# storeNote - store pressed note in pattern data
+# r1 is MIDI note
+#
+
+.storeNote:
+push r2
+push r3
+
+ld8 r2,[0x00500002]
+mul r2,4
+ld8 r3,[0x20010011]
+sub r3,1
+mul r3,12
+add r3,r2
+add r3,0x00501000
+ld8 [r3],r1
+
+pop r3
+pop r2
+rts
+
+#
+# r1 is note number
+#
+
+.playPressedNote:
+push r0
+push r2
+
+ld r0,dataFrequencyTable
+ld r2,r1
+mul r2,4
+add r0,r2
+ld32 r2,[r0]
+div r2,100
+
+ld32 [0x30000007],2500
+ld8 [0x30000006],0xff
+ld32 [0x30000005],r2
+ld8 [0x30000000],9
+
+pop r2
+pop r0
+rts
+
+#
+# check if keypress is one of the "piano-keyboard" keypress
+# r0=key code
+# r1=0-89 if note, 255 otherwise
+#
+
+.checkPianoKey:
+push r2
+push r3
+push r4
+push r5
+
+ld r4,13
+ld r5,60
+
+ld r2,dataPianoKeys
+@@scanPianoKeyCycle:
+ld8 r3,[r2]
+cmp r0,r3
+jz @@pianoKeyIdentified
+add r5,1
+add r2,1
+sub r4,1
+cmp r4,0
+jnz @@scanPianoKeyCycle
+
+
+ld r1,255
+pop r5
+pop r4
+pop r3
+pop r2
+rts
+
+@@pianoKeyIdentified:
+ld r1,r5
+
+pop r5
+pop r4
+pop r3
+pop r2
+rts
+
+#
+#
+#
+
+.moveCursorDown:
+push r0
+push r1
+ld8 r0,[0x20010011]
+ld r1,?SCREENROWS
+sub r1,1
+cmp r0,r1
+jz @@noCursorIncrement
+
+add r0,1
+ld8 [0x20010011],r0
+
+@@noCursorIncrement:
+pop r1
+pop r0
+rts
+
+#
+# startPlaying
+#
+
+.startPlaying:
+
+# status: playing
+ld8 [0x00500004],1
+# current playing row: 0
+ld8 [0x00500005],0
+
+rts
+
+#
+# stopPlaying
+#
+
+.stopPlaying:
+
+ld8 [0x00500004],0
+ld32 [0x00500006],0
+
+rts
+
+#
+# handleKeypress
+#
+
+.handleKeypress:
+push r0
+
+ld8 r0,[0x20010001]
+cmp r0,0
+jz @@endHandleKeypress
+cmp r0,251
+jz @@upKeyPressed
+cmp r0,252
+jz @@downKeyPressed
+cmp r0,250
+jz @@tabKeyPressed
+cmp r0,32
+jz @@spaceKeyPressed
+
+jsr checkPianoKey
+cmp r1,255
+jz @@endHandleKeypress
+
+jsr storeNote
+jsr playPressedNote
+jsr moveCursorDown
+
+jmp @@endHandleKeypress
+
+@@spaceKeyPressed:
+ld8 r0,[0x00500004]
+cmp r0,0
+jz @@startPlaying
+jsr stopPlaying
+jmp @@endHandleKeypress
+@@startPlaying:
+jsr startPlaying
+jmp @@endHandleKeypress
+
+@@tabKeyPressed:
+ld8 r0,[0x00500002]
+cmp r0,2
+jz @@endHandleKeypress
+add r0,1
+ld8 [0x00500002],r0
+ld8 r0,[0x20010010]
+add r0,9
+ld8 [0x20010010],r0
+jmp @@endHandleKeypress
+
+@@upKeyPressed:
+ld8 r0,[0x20010011]
+cmp r0,1
+jz @@endHandleKeypress
+sub r0,1
+ld8 [0x20010011],r0
+jmp @@endHandleKeypress
+
+@@downKeyPressed:
+ld8 r0,[0x20010011]
+cmp r0,29
+jz @@endHandleKeypress
+add r0,1
+ld8 [0x20010011],r0
+
+@@endHandleKeypress:
+
+pop r0
+rts
+
+#
+#
+#
+
+@@main:
+
+jsr generalInit
+
+ld r0,0
+jsr initBlankPattern
+
+# current pattern
+ld8 [0x00500001],0
+# current channel
+ld8 [0x00500002],0
+#current octave
+ld8 [0x00500003],5
+# tracker status
+ld8 [0x00500004],0
+# ticks counter
+ld32 [0x00500006],0
+
+@@mainLoop:
+jsr drawScreen
+jsr playCurrentRow
+jsr incrementTicksIfPlaying
+jsr handleKeypress
+jmp @@mainLoop
+
+hlt
