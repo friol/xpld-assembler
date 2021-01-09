@@ -16,4 +16,5 @@ In the "examples" directory you'll find:
 - kernal.xpld: it's the kernal (aka "BIOS") file that XPLD uses at boot
 - aoc01.xpld: it's a program that solves Advent of Code's problem 1/2020 (Advent of Code is a well known programming contest, see https://adventofcode.com/)
 - maze.xpld: a simple program that draws a random "maze" in XPLD mode0
+- pong.xpld: an arkanoid-style game to say goodbye to 2020
 - tracker.xpld: a music tracker (program to compose computer music)
