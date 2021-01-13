@@ -19,7 +19,8 @@
 # 0x00500004: tracker status: 0 stopped, 1 playing current pattern
 # 0x00500005: current playing row
 # 0x00500006: (32-bit) ticks counter
-#
+# 0x00500010: 0x90 bytes of working ram for output number to screen
+# 0x00500a00: tempo 1-255 (byte)
 
 ORGCODE 0x0
 ORGDS 0x10000
@@ -28,11 +29,14 @@ ORGDS 0x10000
 ?SCREENROWS equ 30
 
 strTrackerName ds "XPLTracker v0.1"
+strCurrentOctave ds "Oct:"
+strCurrentTempo ds "Tempo:"
+
 #                C  C#  D   D#  E   F   F#  G   G#  A   A#  B   C
 dataPianoKeys db 97,119,115,101,100,102,116,103,121,104,117,106,107
 strPatternNotes ds "C-0C#0D-0D#0E-0F-0F#0G-0G#0A-0A#0B-0C-1"
 
-dataFrequencyTable dd 1635,1732,1836,1945,2060,2183,2313,2450,2596,2750,2914,3087,3270,3465,3671,3889,4121,4366,4625,4900,5192,5500,5827,6174,6541,6930,7342,7779,8241,8731,9250,9800,10383,11001,11655,12348,13082,13860,14684,15557,16482,17462,18501,19601,20766,22001,23309,24696,26164,27720,29368,31114,32965,34925,37001,39202,41533,44002,46619,49391,52328,55440,58736,62229,65929,69849,74003,78403,83066,88005,93238,98782,104656,110879,117472,124458,131858,139699,148006,156807,166131,176010,186476,197564,209312,221758,234944,248915,263717,279398,296012,313614,332262,352019,372952,395128
+dataFrequencyTable dd 1635,1732,1836,1945,2060,2183,2313,2450,2596,2750,2914,3087,3270,3465,3671,3889,4121,4366,4625,4900,5192,5500,5827,6174,6541,6930,7342,7779,8241,8731,9250,9800,10383,11001,11655,12348,13082,13860,14684,15557,16482,17462,18501,19601,20766,22001,23309,24696,26164,27720,29368,31114,32965,34925,37001,39202,41533,44002,46619,49391,52328,55440,58733,62229,65929,69849,74003,78403,83066,88005,93238,98782,104656,110879,117472,124458,131858,139699,148006,156807,166131,176010,186476,197564,209312,221758,234944,248915,263717,279398,296012,313614,332262,352019,372952,395128
 
 #
 #
@@ -59,6 +63,23 @@ sub r0,0x1000
 add r0,1
 cmp r0,0x100004af
 jnz @@clearAll
+
+pop r0
+rts
+
+#
+# initStatusBar
+#
+
+.initStatusBar:
+push r0
+
+ld r0,0x10001000
+@@colorStatusBar:
+ld8 [r0],0xc0
+add r0,1
+cmp r0,0x10001028
+jnz @@colorStatusBar
 
 pop r0
 rts
@@ -95,7 +116,76 @@ jmp @@printstring
 rts
 
 #
+# output decimal number to screen
+# the return
+# r0=number to print
+# r14=column
+# r15=row
 #
+
+.outputDecimalNumber2:
+
+push r1
+push r2
+push r3
+push r4
+push r5
+
+cmp r0,0
+jnz @@normalProcessing
+
+ld r1,r15
+mul r1,40
+add r1,0x10000000
+add r1,r14
+ld8 [r1],0x10
+jmp @@endOfOutputDecimalNum
+
+@@normalProcessing:
+ld r2,0x00500010
+ld r3,1
+ld r4,0
+
+@@decNumCycle:
+ld r1,r0
+div r1,r3
+cmp r1,0
+jz @@doneOutputDecNum
+mod r1,10
+add r1,0x10
+ld8 [r2],r1
+add r2,1
+mul r3,10
+add r4,1
+jmp @@decNumCycle
+
+@@doneOutputDecNum:
+
+sub r2,1
+ld r1,r15
+mul r1,40
+add r1,0x10000000
+add r1,r14
+
+@@writeOnScreenNumCycle:
+ld8 r5,[r2]
+ld8 [r1],r5
+add r1,1
+sub r2,1
+sub r4,1
+cmp r4,0
+jnz @@writeOnScreenNumCycle
+
+@@endOfOutputDecimalNum:
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+rts
+
+#
+# draw tracker information (version, current octave, etc.)
 #
 
 .drawTrackerInfo:
@@ -107,6 +197,30 @@ ld r0,strTrackerName
 ld r1,0
 ld r2,0
 jsr outputStringMode0
+
+ld r0,strCurrentOctave
+ld r1,0
+ld r2,25
+jsr outputStringMode0
+
+# r0=number to print
+# r14=column
+# r15=row
+
+ld8 r0,[0x00500003]
+ld r14,29
+ld r15,0
+jsr outputDecimalNumber2
+
+ld r0,strCurrentTempo
+ld r1,0
+ld r2,31
+jsr outputStringMode0
+
+ld8 r0,[0x00500a00]
+ld r14,37
+ld r15,0
+jsr outputDecimalNumber2
 
 pop r2
 pop r1
@@ -337,13 +451,15 @@ jsr drawPatternSubdiv
 rts
 
 #
-#
+# playCurrentRow
+# if in playing status, and if tick counter is zero, play current row
 #
 
 .playCurrentRow:
 push r0
 push r1
 push r2
+push r3
 
 ld8 r0,[0x00500004]
 cmp r0,1
@@ -357,20 +473,39 @@ ld8 r0,[0x00500005]
 ld r1,0x00501000
 mul r0,12
 add r1,r0
-ld8 r2,[r1]
+ld r3,0x30000000
 
+@@mixingCycle:
+ld8 r2,[r1]
 ld r0,dataFrequencyTable
 mul r2,4
 add r0,r2
 ld32 r2,[r0]
 div r2,100
 
-ld32 [0x30000007],2500
-ld8 [0x30000006],0xff
-ld32 [0x30000005],r2
-ld8 [0x30000000],9
+add r3,7
+ld32 [r3],2500
+sub r3,1
+ld8 [r3],0x50
+sub r3,1
+ld32 [r3],r2
+sub r3,5
+cmp r3,0x30000000
+jnz @@squareVoice
+ld8 [r3],3
+jmp @@incMixingCycle
+@@squareVoice:
+ld8 [r3],9
+
+@@incMixingCycle:
+add r1,4
+add r3,0x10
+
+cmp r3,0x30000030
+jnz @@mixingCycle
 
 @@exitPlayUpdate:
+pop r3
 pop r2
 pop r1
 pop r0
@@ -383,6 +518,14 @@ rts
 .incrementTicksIfPlaying:
 push r0
 push r1
+push r2
+push r3
+
+# load tempo in r2
+ld8 r2,[0x00500a00]
+ld r3,256
+sub r3,r2
+mul r3,2
 
 ld8 r0,[0x00500004]
 cmp r0,1
@@ -390,7 +533,7 @@ jnz @@notPlayingNoIncrement
 
 ld r0,[0x00500006]
 add r0,1
-cmp r0,1024
+cmp r0,r3
 jnz @@justStoreTicks
 
 # time to change row
@@ -404,6 +547,8 @@ ld8 [0x00500005],r1
 ld32 [0x00500006],r0
 
 @@notPlayingNoIncrement:
+pop r3
+pop r2
 pop r1
 pop r0
 rts
@@ -458,6 +603,7 @@ rts
 .storeNote:
 push r2
 push r3
+push r4
 
 ld8 r2,[0x00500002]
 mul r2,4
@@ -468,6 +614,7 @@ add r3,r2
 add r3,0x00501000
 ld8 [r3],r1
 
+pop r4
 pop r3
 pop r2
 rts
@@ -490,7 +637,7 @@ div r2,100
 ld32 [0x30000007],2500
 ld8 [0x30000006],0xff
 ld32 [0x30000005],r2
-ld8 [0x30000000],9
+ld8 [0x30000000],3
 
 pop r2
 pop r0
@@ -509,7 +656,9 @@ push r4
 push r5
 
 ld r4,13
-ld r5,60
+
+ld8 r5,[0x00500003]
+mul r5,12
 
 ld r2,dataPianoKeys
 @@scanPianoKeyCycle:
@@ -521,7 +670,6 @@ add r2,1
 sub r4,1
 cmp r4,0
 jnz @@scanPianoKeyCycle
-
 
 ld r1,255
 pop r5
@@ -598,8 +746,18 @@ cmp r0,251
 jz @@upKeyPressed
 cmp r0,252
 jz @@downKeyPressed
+cmp r0,253
+jz @@leftKeyPressed
 cmp r0,250
 jz @@tabKeyPressed
+cmp r0,249
+jz @@pgUpPressed
+cmp r0,248
+jz @@pgDownPressed
+cmp r0,247
+jz @@homePressed
+cmp r0,246
+jz @@endPressed
 cmp r0,32
 jz @@spaceKeyPressed
 
@@ -623,6 +781,38 @@ jmp @@endHandleKeypress
 jsr startPlaying
 jmp @@endHandleKeypress
 
+@@homePressed:
+ld8 r0,[0x00500a00]
+cmp r0,255
+jz @@endHandleKeypress
+add r0,1
+ld8 [0x00500a00],r0
+jmp @@endHandleKeypress
+
+@@endPressed:
+ld8 r0,[0x00500a00]
+cmp r0,1
+jz @@endHandleKeypress
+sub r0,1
+ld8 [0x00500a00],r0
+jmp @@endHandleKeypress
+
+@@pgUpPressed:
+ld8 r0,[0x00500003]
+cmp r0,8
+jz @@endHandleKeypress
+add r0,1
+ld8 [0x00500003],r0
+jmp @@endHandleKeypress
+
+@@pgDownPressed:
+ld8 r0,[0x00500003]
+cmp r0,0
+jz @@endHandleKeypress
+sub r0,1
+ld8 [0x00500003],r0
+jmp @@endHandleKeypress
+
 @@tabKeyPressed:
 ld8 r0,[0x00500002]
 cmp r0,2
@@ -631,6 +821,17 @@ add r0,1
 ld8 [0x00500002],r0
 ld8 r0,[0x20010010]
 add r0,9
+ld8 [0x20010010],r0
+jmp @@endHandleKeypress
+
+@@leftKeyPressed:
+ld8 r0,[0x00500002]
+cmp r0,0
+jz @@endHandleKeypress
+sub r0,1
+ld8 [0x00500002],r0
+ld8 r0,[0x20010010]
+sub r0,9
 ld8 [0x20010010],r0
 jmp @@endHandleKeypress
 
@@ -655,7 +856,7 @@ pop r0
 rts
 
 #
-#
+# main
 #
 
 @@main:
@@ -664,6 +865,7 @@ jsr generalInit
 
 ld r0,0
 jsr initBlankPattern
+jsr initStatusBar
 
 # current pattern
 ld8 [0x00500001],0
@@ -675,6 +877,8 @@ ld8 [0x00500003],5
 ld8 [0x00500004],0
 # ticks counter
 ld32 [0x00500006],0
+# initial tempo
+ld8 [0x00500a00],128
 
 @@mainLoop:
 jsr drawScreen
