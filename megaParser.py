@@ -221,6 +221,11 @@ class megaParser:
                     opcodeAdder=0xc;
                 else:
                     opcodeAdder=7;
+            elif ldname=="ld32":
+                if i2.children[0].type in ["DECIMALNUMBER","HEXNUMBER"]:
+                    opcodeAdder=0xe;
+                else:
+                    opcodeAdder=0xb;
             else:
                 opcodeAdder=0xb;
 

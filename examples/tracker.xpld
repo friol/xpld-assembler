@@ -8,7 +8,7 @@
 # pattern format:
 # note: 1 byte 0-89, 255: no note, 254: break note
 # volume: 1 byte
-# future use: 1 byte
+# instrument: 1 byte (0-f)
 # future use: 1 byte
 #
 # pattern 0 starts at 0x00501000
@@ -21,6 +21,8 @@
 # 0x00500006: (32-bit) ticks counter
 # 0x00500010: 0x90 bytes of working ram for output number to screen
 # 0x00500a00: tempo 1-255 (byte)
+# 0x00500a01: current instrument (byte)
+#
 
 ORGCODE 0x0
 ORGDS 0x10000
@@ -31,6 +33,7 @@ ORGDS 0x10000
 strTrackerName ds "XPLTracker v0.1"
 strCurrentOctave ds "Oct:"
 strCurrentTempo ds "Tempo:"
+strCurrentInstrument ds "Ins:"
 
 #                C  C#  D   D#  E   F   F#  G   G#  A   A#  B   C
 dataPianoKeys db 97,119,115,101,100,102,116,103,121,104,117,106,107
@@ -198,6 +201,16 @@ ld r1,0
 ld r2,0
 jsr outputStringMode0
 
+ld r0,strCurrentInstrument
+ld r1,0
+ld r2,19
+jsr outputStringMode0
+
+ld8 r0,[0x00500a01]
+ld r14,23
+ld r15,0
+jsr outputDecimalNumber2
+
 ld r0,strCurrentOctave
 ld r1,0
 ld r2,25
@@ -244,6 +257,8 @@ rts
 #
 # r1=screen pointer
 # r2=note num
+# r6=note instrument
+#
 
 .drawNoteInPattern:
 
@@ -277,6 +292,14 @@ add r4,16
 ld8 [r1],r4
 add r1,1
 
+# draw -instrument
+ld8 [r1],13
+add r1,1
+
+add r6,0x10
+ld8 [r1],r6
+add r1,1
+
 pop r5
 pop r4
 pop r3
@@ -290,15 +313,19 @@ rts
 
 .decodeAndDrawChan:
 push r2
+push r6
 
 ld8 r2,[r0]
 add r0,1
 cmp r2,255
 jz @@drawEmptyNote
+add r0,1
+ld8 r6,[r0]
+sub r0,1
 
 # draw note
 jsr drawNoteInPattern
-jmp @@drawSeparator
+jmp @@labelDrawVolume
 
 @@drawEmptyNote:
 ld8 [r1],13
@@ -307,20 +334,18 @@ ld8 [r1],13
 add r1,1
 ld8 [r1],13
 add r1,1
-
-@@drawSeparator:
-# draw two -- (separator)
 ld8 [r1],13
 add r1,1
 ld8 [r1],13
 add r1,1
 
+@@labelDrawVolume:
 # draw volume
 ld8 r2,[r0]
 add r0,1
 jsr drawVolumeForChan
 
-# read unused bytes
+# read remaining bytes
 ld8 r2,[r0]
 add r0,1
 ld8 r2,[r0]
@@ -328,12 +353,13 @@ add r0,1
 
 # channel done
 
+pop r6
 pop r2
 rts
 
 #
 # draw current pattern 
-# A-4--ff 
+# A-4-iff 
 # B-4----
 #
 
@@ -473,32 +499,39 @@ ld8 r0,[0x00500005]
 ld r1,0x00501000
 mul r0,12
 add r1,r0
+
 ld r3,0x30000000
 
 @@mixingCycle:
 ld8 r2,[r1]
+cmp r2,255
+jnz @@mixTheNote
+
+add r1,2
+jmp @@incMixingCycle
+
+@@mixTheNote:
 ld r0,dataFrequencyTable
 mul r2,4
 add r0,r2
 ld32 r2,[r0]
 div r2,100
 
+add r1,2
+ld8 r0,[r1]
+jsr getCurrentInstrumentParams
+
 add r3,7
-ld32 [r3],2500
+ld32 [r3],r8
 sub r3,1
 ld8 [r3],0x50
 sub r3,1
 ld32 [r3],r2
 sub r3,5
-cmp r3,0x30000000
-jnz @@squareVoice
-ld8 [r3],3
-jmp @@incMixingCycle
-@@squareVoice:
-ld8 [r3],9
+ld8 [r3],r9
 
 @@incMixingCycle:
-add r1,4
+add r1,2
 add r3,0x10
 
 cmp r3,0x30000030
@@ -614,9 +647,83 @@ add r3,r2
 add r3,0x00501000
 ld8 [r3],r1
 
+# instrument
+ld8 r2,[0x00500a01]
+add r3,2
+ld8 [r3],r2
+
 pop r4
 pop r3
 pop r2
+rts
+
+#
+# getCurrentInstrumentParams
+# r0 (input) instrument
+# r8 speed
+# r9 waveform+active
+# r10 attack
+# r11 decay
+# r12 sustain
+# r13 release
+#
+
+.getCurrentInstrumentParams:
+
+cmp r0,0
+jz @@instrument0
+cmp r0,1
+jz @@instrument1
+cmp r0,2
+jz @@instrument2
+cmp r0,3
+jz @@instrument3
+#default params
+ld r8,2500
+ld r9,9
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument0:
+ld r8,90000
+ld r9,9
+ld r10,10
+ld r11,10
+ld r12,60
+ld r13,20
+jmp @@endGetCurrInstr
+
+@@instrument1:
+ld r8,2500
+ld r9,3
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument2:
+ld r8,25000
+ld r9,5
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument3:
+ld r8,2500
+ld r9,17
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@endGetCurrInstr:
 rts
 
 #
@@ -634,10 +741,13 @@ add r0,r2
 ld32 r2,[r0]
 div r2,100
 
-ld32 [0x30000007],2500
+ld8 r0,[0x00500a01]
+jsr getCurrentInstrumentParams
+
+ld32 [0x30000007],r8
 ld8 [0x30000006],0xff
 ld32 [0x30000005],r2
-ld8 [0x30000000],3
+ld8 [0x30000000],r9
 
 pop r2
 pop r0
@@ -733,6 +843,30 @@ ld32 [0x00500006],0
 rts
 
 #
+# delete note at cursor
+#
+
+.deleteCurrentNote:
+push r0
+push r1
+
+# r0=cursor row
+ld8 r0,[0x20010011]
+sub r0,1
+# r1=current chan
+ld8 r1,[0x00500002]
+
+mul r0,12
+mul r1,4
+add r0,r1
+add r0,0x00501000
+ld8 [r0],255
+
+pop r1
+pop r0
+rts
+
+#
 # handleKeypress
 #
 
@@ -758,6 +892,12 @@ cmp r0,247
 jz @@homePressed
 cmp r0,246
 jz @@endPressed
+cmp r0,245
+jz @@deletePressed
+cmp r0,244
+jz @@plusPressed
+cmp r0,243
+jz @@minusPressed
 cmp r0,32
 jz @@spaceKeyPressed
 
@@ -771,6 +911,22 @@ jsr moveCursorDown
 
 jmp @@endHandleKeypress
 
+@@plusPressed:
+ld8 r0,[0x00500a01]
+cmp r0,3
+jz @@endHandleKeypress
+add r0,1
+ld8 [0x00500a01],r0
+jmp @@endHandleKeypress
+
+@@minusPressed:
+ld8 r0,[0x00500a01]
+cmp r0,0
+jz @@endHandleKeypress
+sub r0,1
+ld8 [0x00500a01],r0
+jmp @@endHandleKeypress
+
 @@spaceKeyPressed:
 ld8 r0,[0x00500004]
 cmp r0,0
@@ -779,6 +935,10 @@ jsr stopPlaying
 jmp @@endHandleKeypress
 @@startPlaying:
 jsr startPlaying
+jmp @@endHandleKeypress
+
+@@deletePressed:
+jsr deleteCurrentNote
 jmp @@endHandleKeypress
 
 @@homePressed:
@@ -879,6 +1039,8 @@ ld8 [0x00500004],0
 ld32 [0x00500006],0
 # initial tempo
 ld8 [0x00500a00],128
+# current instrument
+ld8 [0x00500a01],0
 
 @@mainLoop:
 jsr drawScreen
