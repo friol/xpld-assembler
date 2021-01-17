@@ -1,8 +1,8 @@
 
 #
-# xpld tracker v0.1
+# XPLTracker v0.1
 # music!
-# A-4--ff 
+# A-4-iff 
 # B-4----
 #
 # pattern format:
@@ -22,6 +22,8 @@
 # 0x00500010: 0x90 bytes of working ram for output number to screen
 # 0x00500a00: tempo 1-255 (byte)
 # 0x00500a01: current instrument (byte)
+# 0x00500a02: current top row (byte)
+# 0x00500a03: tracker page: 0: pattern track, 1 help page, 2 save page
 #
 
 ORGCODE 0x0
@@ -35,6 +37,13 @@ strCurrentOctave ds "Oct:"
 strCurrentTempo ds "Tempo:"
 strCurrentInstrument ds "Ins:"
 
+strHelpline0 ds "Some useful keys for XPLTracker:"
+strHelpline1 ds "* AWSEDFTGYHUJK is the virtual keyboard"
+strHelpline2 ds "* pgUp-pgDown increment-decrement octave"
+strHelpline3 ds "* home-end increment-decrement tempo"
+strHelpline4 ds "* ins-backspace increment-decrement instrument"
+strHelpline5 ds "* SPACE starts-stops playing pattern"
+
 #                C  C#  D   D#  E   F   F#  G   G#  A   A#  B   C
 dataPianoKeys db 97,119,115,101,100,102,116,103,121,104,117,106,107
 strPatternNotes ds "C-0C#0D-0D#0E-0F-0F#0G-0G#0A-0A#0B-0C-1"
@@ -46,6 +55,21 @@ dataFrequencyTable dd 1635,1732,1836,1945,2060,2183,2313,2450,2596,2750,2914,308
 #
 
 jmp @@main
+
+#
+# waitForRetrace
+# (c) friol 1999
+#
+
+.waitForRetrace:
+push r0
+@@wfrLoop:
+ld8 r0,[0x20000000]
+and r0,0x02
+cmp r0,0x02
+jnz @@wfrLoop
+pop r0
+rts
 
 #
 # clear screen and attributes, set cursor in upper left corner
@@ -368,6 +392,7 @@ push r0
 push r1
 push r2
 push r4
+push r5
 
 ld r0,0x00501000
 ld r1,?ROWSPERPATTERN
@@ -376,6 +401,10 @@ mul r1,4
 ld8 r2,[0x00500001]
 mul r2,r1
 add r0,r2
+
+ld8 r4,[0x00500a02]
+mul r4,12
+add r0,r4
 
 # r0 now points to the pattern data
 
@@ -412,10 +441,13 @@ jz @@noHighlight
 ld r0,0x10001028
 ld8 r1,[0x00500005]
 add r1,1
-ld r2,1
+ld r2,[0x00500a02]
+add r2,1
+ld r5,?SCREENROWS
+add r5,r2
 
 @@normalRowCycle:
-ld r4,0x1b
+ld r4,0x1a
 @@highlightRowCycle:
 cmp r2,r1
 jnz @@normalRow
@@ -428,14 +460,62 @@ add r0,1
 sub r4,1
 cmp r4,0
 jnz @@highlightRowCycle
-add r0,0xd
+add r0,0xe
 add r2,1
-cmp r2,?SCREENROWS
+cmp r2,r5
 jnz @@normalRowCycle
 
-
 @@noHighlight:
+pop r5
 pop r4
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# draws ">" sign every 4 rows
+#
+
+.drawPatternSubdiv:
+push r0
+push r1
+
+ld r0,0x10000028
+ld r1,8
+
+@@drawDotsSub:
+ld8 [r0],30
+add r0,0xa0
+sub r1,1
+cmp r1,0
+jnz @@drawDotsSub
+
+pop r1
+pop r0
+rts
+
+#
+#
+#
+
+.clearScreen:
+push r0
+push r1
+push r2
+
+ld r0,0x10000028
+ld r1,0x10001028
+ld r2,1160
+@@clearScreenLoop:
+ld8 [r0],0
+ld8 [r1],0x54
+add r0,1
+add r1,1
+sub r2,1
+cmp r2,0
+jnz @@clearScreenLoop
+
 pop r2
 pop r1
 pop r0
@@ -445,22 +525,57 @@ rts
 #
 #
 
-.drawPatternSubdiv:
+.drawHelp:
 push r0
 push r1
+push r2
 
-ld r0,0x10000028
+ld r0,strHelpline0
+ld r1,2
+ld r2,0
+jsr outputStringMode0
+
+ld r0,strHelpline1
 ld r1,4
+ld r2,0
+jsr outputStringMode0
 
-@@drawDotsSub:
-ld8 [r0],14
-add r0,0xa0
-sub r1,1
-cmp r1,0
-jnz @@drawDotsSub
+ld r0,strHelpline2
+ld r1,5
+ld r2,0
+jsr outputStringMode0
 
+ld r0,strHelpline3
+ld r1,6
+ld r2,0
+jsr outputStringMode0
+
+ld r0,strHelpline4
+ld r1,7
+ld r2,0
+jsr outputStringMode0
+
+ld r0,strHelpline5
+ld r1,8
+ld r2,0
+jsr outputStringMode0
+
+pop r2
 pop r1
 pop r0
+rts
+
+#
+# draw help screen
+#
+
+.drawHelpScreen:
+
+jsr waitForRetrace
+jsr clearScreen
+jsr drawTrackerInfo
+jsr drawHelp
+
 rts
 
 
@@ -558,7 +673,8 @@ push r3
 ld8 r2,[0x00500a00]
 ld r3,256
 sub r3,r2
-mul r3,2
+#mul r3,2
+shr r3,4
 
 ld8 r0,[0x00500004]
 cmp r0,1
@@ -640,8 +756,12 @@ push r4
 
 ld8 r2,[0x00500002]
 mul r2,4
+
+ld8 r4,[0x00500a02]
+
 ld8 r3,[0x20010011]
 sub r3,1
+add r3,r4
 mul r3,12
 add r3,r2
 add r3,0x00501000
@@ -853,6 +973,8 @@ push r1
 # r0=cursor row
 ld8 r0,[0x20010011]
 sub r0,1
+ld8 r1,[0x00500a02]
+add r0,r1
 # r1=current chan
 ld8 r1,[0x00500002]
 
@@ -900,6 +1022,10 @@ cmp r0,243
 jz @@minusPressed
 cmp r0,32
 jz @@spaceKeyPressed
+cmp r0,0x31
+jz @@onePressed
+cmp r0,0x32
+jz @@twoPressed
 
 jsr checkPianoKey
 cmp r1,255
@@ -909,6 +1035,14 @@ jsr storeNote
 jsr playPressedNote
 jsr moveCursorDown
 
+jmp @@endHandleKeypress
+
+@@onePressed:
+ld8 [0x00500a03],0
+jmp @@endHandleKeypress
+
+@@twoPressed:
+ld8 [0x00500a03],1
 jmp @@endHandleKeypress
 
 @@plusPressed:
@@ -998,17 +1132,35 @@ jmp @@endHandleKeypress
 @@upKeyPressed:
 ld8 r0,[0x20010011]
 cmp r0,1
-jz @@endHandleKeypress
+jz @@upperLineCursor
+
 sub r0,1
 ld8 [0x20010011],r0
+jmp @@endHandleKeypress
+
+@@upperLineCursor:
+ld8 r0,[0x00500a02]
+cmp r0,0
+jz @@endHandleKeypress
+sub r0,1
+ld8 [0x00500a02],r0
 jmp @@endHandleKeypress
 
 @@downKeyPressed:
 ld8 r0,[0x20010011]
 cmp r0,29
-jz @@endHandleKeypress
+jz @@bottomLineCursor
+
 add r0,1
 ld8 [0x20010011],r0
+jmp @@endHandleKeypress
+
+@@bottomLineCursor:
+ld8 r0,[0x00500a02]
+cmp r0,33
+jz @@endHandleKeypress
+add r0,1
+ld8 [0x00500a02],r0
 
 @@endHandleKeypress:
 
@@ -1041,12 +1193,35 @@ ld32 [0x00500006],0
 ld8 [0x00500a00],128
 # current instrument
 ld8 [0x00500a01],0
+# current toprow
+ld8 [0x00500a02],0
+# tracker screen
+ld8 [0x00500a03],0
 
 @@mainLoop:
+ld8 r0,[0x00500a03]
+cmp r0,0
+jz @@patternTrackingMode
+cmp r0,1
+jz @@helpScreenMode
+cmp r0,2
+jz @@saveModuleMode
+
+@@patternTrackingMode:
+jsr waitForRetrace
 jsr drawScreen
 jsr playCurrentRow
 jsr incrementTicksIfPlaying
 jsr handleKeypress
+jmp @@mainLoop
+
+@@helpScreenMode:
+jsr drawHelpScreen
+jsr handleKeypress
+jmp @@mainLoop
+
+@@saveModuleMode:
+
 jmp @@mainLoop
 
 hlt
