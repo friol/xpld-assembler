@@ -23,7 +23,8 @@
 # 0x00500a00: tempo 1-255 (byte)
 # 0x00500a01: current instrument (byte)
 # 0x00500a02: current top row (byte)
-# 0x00500a03: tracker page: 0: pattern track, 1 help page, 2 save page
+# 0x00500a03: tracker page: 0: pattern track, 1 help page, 2 save page, 3 load page
+# 0x00500a04: 0xfb bytes of working ram for load/save filename
 #
 
 ORGCODE 0x0
@@ -36,6 +37,12 @@ strTrackerName ds "XPLTracker v0.1"
 strCurrentOctave ds "Oct:"
 strCurrentTempo ds "Tempo:"
 strCurrentInstrument ds "Ins:"
+
+strSaveFilename ds "Save filename:"
+strEnterSaves ds "(ENTER saves module)"
+
+strLoadFilename ds "Load filename:"
+strEnterLoads ds "(ENTER loads module)"
 
 strHelpline0 ds "Some useful keys for XPLTracker:"
 strHelpline1 ds "* AWSEDFTGYHUJK is the virtual keyboard"
@@ -110,6 +117,90 @@ jnz @@colorStatusBar
 
 pop r0
 rts
+
+#
+# load module with OS api
+#
+
+.loadModule:
+push r0
+push r1
+push r2
+push r3
+push r4
+
+ld r0,14
+ld8 r1,[0x20010010]
+ld r2,0x00500a04
+ld r3,0x10000050
+add r3,14
+
+@@moveLoadFilenameCycle:
+ld8 r4,[r3]
+sub r4,32
+ld8 [r2],r4
+add r3,1
+add r2,1
+add r0,1
+cmp r0,r1
+jnz @@moveLoadFilenameCycle
+ld8 [r2],0
+
+# call OS API
+ld32 [0x20020001],0x00500a04
+ld32 [0x20020002],0x00501000
+ld32 [0x20020003],0x00501440
+ld8 [0x20020000],4
+
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+
+#
+# save current module with OS api
+#
+
+.saveModule:
+push r0
+push r1
+push r2
+push r3
+push r4
+
+ld r0,14
+ld8 r1,[0x20010010]
+ld r2,0x00500a04
+ld r3,0x10000050
+add r3,14
+
+@@moveFilenameCycle:
+ld8 r4,[r3]
+sub r4,32
+ld8 [r2],r4
+add r3,1
+add r2,1
+add r0,1
+cmp r0,r1
+jnz @@moveFilenameCycle
+ld8 [r2],0
+
+# set 0x20020001,0x20020002,0x20020003
+ld32 [0x20020001],0x00500a04
+ld32 [0x20020002],0x00501000
+ld32 [0x20020003],0x00501440
+ld8 [0x20020000],3
+
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
 
 #
 # sub: output 0-terminated string to mode0 videoram
@@ -441,7 +532,7 @@ jz @@noHighlight
 ld r0,0x10001028
 ld8 r1,[0x00500005]
 add r1,1
-ld r2,[0x00500a02]
+ld8 r2,[0x00500a02]
 add r2,1
 ld r5,?SCREENROWS
 add r5,r2
@@ -578,6 +669,48 @@ jsr drawHelp
 
 rts
 
+#
+# draw load file screen
+#
+
+.drawLoadScreen:
+
+jsr waitForRetrace
+jsr drawTrackerInfo
+
+ld r0,strLoadFilename
+ld r1,2
+ld r2,0
+jsr outputStringMode0
+
+ld r0,strEnterLoads
+ld r1,4
+ld r2,0
+jsr outputStringMode0
+
+rts
+
+
+#
+# draw save file screen
+#
+
+.drawSaveScreen:
+
+jsr waitForRetrace
+jsr drawTrackerInfo
+
+ld r0,strSaveFilename
+ld r1,2
+ld r2,0
+jsr outputStringMode0
+
+ld r0,strEnterSaves
+ld r1,4
+ld r2,0
+jsr outputStringMode0
+
+rts
 
 #
 # draw screen
@@ -808,21 +941,21 @@ ld r13,25
 jmp @@endGetCurrInstr
 
 @@instrument0:
-ld r8,90000
-ld r9,9
-ld r10,10
-ld r11,10
-ld r12,60
-ld r13,20
-jmp @@endGetCurrInstr
-
-@@instrument1:
 ld r8,2500
 ld r9,3
 ld r10,25
 ld r11,25
 ld r12,25
 ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument1:
+ld r8,3000
+ld r9,9
+ld r10,10
+ld r11,10
+ld r12,60
+ld r13,20
 jmp @@endGetCurrInstr
 
 @@instrument2:
@@ -1026,6 +1159,10 @@ cmp r0,0x31
 jz @@onePressed
 cmp r0,0x32
 jz @@twoPressed
+cmp r0,0x33
+jz @@threePressed
+cmp r0,0x34
+jz @@fourPressed
 
 jsr checkPianoKey
 cmp r1,255
@@ -1039,10 +1176,28 @@ jmp @@endHandleKeypress
 
 @@onePressed:
 ld8 [0x00500a03],0
+jsr clearScreen
 jmp @@endHandleKeypress
 
 @@twoPressed:
 ld8 [0x00500a03],1
+jsr clearScreen
+jmp @@endHandleKeypress
+
+@@threePressed:
+ld8 [0x00500a03],2
+jsr clearScreen
+# cursor should be near file save prompt
+ld8 [0x20010010],14
+ld8 [0x20010011],2
+jmp @@endHandleKeypress
+
+@@fourPressed:
+ld8 [0x00500a03],3
+jsr clearScreen
+# cursor should be near file load prompt
+ld8 [0x20010010],14
+ld8 [0x20010011],2
 jmp @@endHandleKeypress
 
 @@plusPressed:
@@ -1168,6 +1323,134 @@ pop r0
 rts
 
 #
+# handleLoadKeys
+#
+
+.handleLoadKeys:
+push r0
+push r1
+push r2
+
+ld8 r0,[0x20010001]
+cmp r0,0
+jz @@endHandleLoadKeys
+cmp r0,13
+jz @@loadEnteredModule
+cmp r0,243
+jz @@backspaceLoadFilename
+
+ld r1,97
+@@scanKeyboardLoadCycle:
+cmp r0,r1
+jz @@drawPressedKeyLoad
+add r1,1
+cmp r1,123
+jnz @@scanKeyboardLoadCycle
+jmp @@endHandleLoadKeys
+
+@@backspaceLoadFilename:
+ld8 r0,[0x20010010]
+cmp r0,14
+jz @@endHandleLoadKeys
+ld r1,0x10000050
+add r1,r0
+sub r1,1
+ld8 [r1],0
+sub r0,1
+ld8 [0x20010010],r0
+jmp @@endHandleLoadKeys
+
+@@drawPressedKeyLoad:
+ld r2,r0
+ld8 r0,[0x20010010]
+ld8 r1,[0x20010011]
+mul r1,40
+add r1,r0
+add r1,0x10000000
+sub r2,32
+ld8 [r1],r2
+add r0,1
+ld8 [0x20010010],r0
+jmp @@endHandleLoadKeys
+
+@@loadEnteredModule:
+jsr loadModule
+ld8 [0x00500a03],0
+jsr clearScreen
+ld8 [0x20010010],1
+
+@@endHandleLoadKeys:
+pop r2
+pop r1
+pop r0
+
+rts
+
+#
+# handleSaveKeys
+#
+
+.handleSaveKeys:
+push r0
+push r1
+push r2
+
+ld8 r0,[0x20010001]
+cmp r0,0
+jz @@endHandleSaveKeys
+cmp r0,13
+jz @@saveEnteredModule
+cmp r0,243
+jz @@backspaceSaveFilename
+
+ld r1,97
+@@scanKeyboardCycle:
+cmp r0,r1
+jz @@drawPressedKey
+add r1,1
+cmp r1,123
+jnz @@scanKeyboardCycle
+jmp @@endHandleSaveKeys
+
+@@backspaceSaveFilename:
+ld8 r0,[0x20010010]
+cmp r0,14
+jz @@endHandleSaveKeys
+ld r1,0x10000050
+add r1,r0
+sub r1,1
+ld8 [r1],0
+sub r0,1
+ld8 [0x20010010],r0
+jmp @@endHandleSaveKeys
+
+@@drawPressedKey:
+ld r2,r0
+ld8 r0,[0x20010010]
+ld8 r1,[0x20010011]
+mul r1,40
+add r1,r0
+add r1,0x10000000
+sub r2,32
+ld8 [r1],r2
+add r0,1
+ld8 [0x20010010],r0
+jmp @@endHandleSaveKeys
+
+@@saveEnteredModule:
+#TODO save module
+jsr saveModule
+ld8 [0x00500a03],0
+jsr clearScreen
+ld8 [0x20010010],1
+
+@@endHandleSaveKeys:
+pop r2
+pop r1
+pop r0
+rts
+
+#
 # main
 #
 
@@ -1206,6 +1489,8 @@ cmp r0,1
 jz @@helpScreenMode
 cmp r0,2
 jz @@saveModuleMode
+cmp r0,3
+jz @@loadModuleMode
 
 @@patternTrackingMode:
 jsr waitForRetrace
@@ -1221,7 +1506,13 @@ jsr handleKeypress
 jmp @@mainLoop
 
 @@saveModuleMode:
+jsr drawSaveScreen
+jsr handleSaveKeys
+jmp @@mainLoop
 
+@@loadModuleMode:
+jsr drawLoadScreen
+jsr handleLoadKeys
 jmp @@mainLoop
 
 hlt
