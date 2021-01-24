@@ -53,7 +53,10 @@ dataSegmentBinary=array.array('B');
 
 mp=megaParser();
 try:
-    mp.parse("".join(intxt)+"\n");
+    print("Pre-processing includes...");
+    resArr=mp.preprocessIncludes(intxt);
+    print("Parsing source...");
+    mp.parse("".join(resArr)+"\n");
 except:
     print("Exception parsing file:");
     print(sys.exc_info()[1]);

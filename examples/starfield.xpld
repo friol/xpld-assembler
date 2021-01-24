@@ -1,0 +1,165 @@
+
+#
+# starfield routines
+# 0x00530000 - start of 3d stars
+#
+
+?NUMSTARS equ 256
+
+
+#
+# creates a random number at each call
+# 0x005ffffc is seed&updated
+# r0 is mod
+# random number is returned in r15
+#
+
+.getRandomNumber:
+push r1
+push r2
+ld r1,[0x005ffffc]
+ld r2,[0x20010000]
+add r1,r2
+mul r1,0xf3f1df67
+mod r1,0xefcdef15
+ld32 [0x005ffffc],r1
+mod r1,r0
+ld r15,r1
+pop r2
+pop r1
+rts
+
+
+.initialize3dstars:
+push r0
+push r1
+push r2
+push r3
+push r4
+push r5
+
+ld r1,0x00530000
+ld r2,0
+
+@@starCycle:
+ld r0,320
+jsr getRandomNumber
+ld r3,r15
+
+sub r3,160
+
+ld r0,240
+jsr getRandomNumber
+ld r4,r15
+
+sub r4,120
+
+ld r0,256
+jsr getRandomNumber
+ld r5,r15
+
+ld32 [r1],r3
+add r1,4
+ld32 [r1],r4
+add r1,4
+ld32 [r1],r5
+add r1,4
+
+add r2,1
+cmp r2,?NUMSTARS
+jnz @@starCycle
+
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+#
+#
+
+.projectAndPlotStarfield:
+push r0
+push r1
+push r2
+push r3
+push r4
+push r15
+
+ld r0,0x00530000
+ld r1,0
+
+@@projectStarsCycle:
+
+ld32 r2,[r0]
+add r0,4
+ld32 r3,[r0]
+add r0,4
+ld32 r4,[r0]
+add r0,4
+
+ld32 [0x20010101],r2
+ld32 [0x20010102],r3
+ld32 [0x20010103],r4
+ld32 [0x20010104],4096
+ld8 [0x20010100],0
+
+ld r2,[0x20010105]
+ld r3,[0x20010106]
+
+ld r15,256
+sub r15,r4
+div r15,32
+
+jsr plotpixel
+
+add r1,1
+cmp r1,?NUMSTARS
+jnz @@projectStarsCycle
+
+pop r15
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+#
+#
+
+.updateStars:
+push r0
+push r1
+push r2
+
+ld r0,0x00530000
+ld r1,0
+
+@@updateStarsCycle:
+
+add r0,8
+ld32 r2,[r0]
+cmp r2,0
+jnz @@normalUpdateStar
+ld r2,128
+jmp @@writeUpdatedStarValue
+@@normalUpdateStar:
+sub r2,1
+@@writeUpdatedStarValue:
+ld32 [r0],r2
+
+add r0,4
+
+add r1,1
+cmp r1,?NUMSTARS
+jnz @@updateStarsCycle
+
+pop r2
+pop r1
+pop r0
+rts

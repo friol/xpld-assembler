@@ -959,7 +959,7 @@ ld r13,20
 jmp @@endGetCurrInstr
 
 @@instrument2:
-ld r8,25000
+ld r8,100000
 ld r9,5
 ld r10,25
 ld r11,25

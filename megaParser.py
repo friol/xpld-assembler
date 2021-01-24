@@ -42,7 +42,8 @@ class megaParser:
             'jmp':0x80,
             'jsr':0x90,
             'rts':0x91,
-            'shr':0xa0
+            'shr':0xa0,
+            'shl':0xa2
             };
 
     #
@@ -91,6 +92,7 @@ class megaParser:
         | SUB_INSTR [argument ("," argument)*] 
         | MUL_INSTR [argument ("," argument)*] 
         | SHR_INSTR [argument ("," argument)*] 
+        | SHL_INSTR [argument ("," argument)*] 
         | DIV_INSTR [argument ("," argument)*] 
         | PUSH_INSTR REGISTERNAME
         | POP_INSTR REGISTERNAME
@@ -123,6 +125,7 @@ class megaParser:
         PUSH_INSTR: "push"
         POP_INSTR: "pop"
         SHR_INSTR: "shr"
+        SHL_INSTR: "shl"
         DIV_INSTR: "div"
         ORGCODE_INSTR: "ORGCODE"
         ORGDS_INSTR: "ORGDS"
@@ -493,6 +496,57 @@ class megaParser:
         return True;
 
     #
+    # evaluate shl instruction
+    #
+
+    def evaluateShl(self,i1,i2,outarr,addname):
+
+        opcodeAdder=0;
+
+        assert i1.data=="argument";
+        assert i2.data=="argument";
+
+        assert i1.children[0].type=="REGISTERNAME";
+
+        if i1.children[0].type=="REGISTERNAME":
+            destReg=i1.children[0];
+            assert destReg in ["r0","r1","r2","r3","r4","r5","r6","r7","r8","r9","r10","r11","r12","r13","r14","r15"];
+
+            if i2.children[0].type in ["DECIMALNUMBER","HEXNUMBER"]:
+                opcodeAdder=0;
+            elif i2.children[0].type=="REGISTERNAME":
+                opcodeAdder=1;
+
+        # spit out opcode
+        outarr.append(self.instrDict['shl']+opcodeAdder);
+        self.codePointer+=1;
+
+        #spit out dest register id (or relative address)
+        outarr.append(int(destReg[1:]));
+        self.codePointer+=1;
+
+        # spit out arguments
+        if i2.children[0].type in ["DECIMALNUMBER","HEXNUMBER"]:
+            finalVal=0;
+            val=i2.children[0];
+            try:
+                if val[0:2]=="0x":
+                    finalVal=int(val,16);
+                else:
+                    finalVal=int(val);
+                #print("Spitting out 32bit value for "+str(finalVal));
+            except:
+                print("Unable to parse as number value ["+val+"]");
+                return False;
+            self.spit32bitNumber(finalVal,outarr);
+        elif i2.children[0].type=="REGISTERNAME":
+            srcReg=i2.children[0];
+            outarr.append(int(srcReg[1:]));
+            self.codePointer+=1;
+
+        return True;
+
+    #
     # evaluate mul instruction
     #
 
@@ -830,6 +884,9 @@ class megaParser:
         elif instr[0].type=="SHR_INSTR":
             if not self.evaluateShr(instr[1],instr[2],outBinArr,instr[0]):
                 sys.exit(1);
+        elif instr[0].type=="SHL_INSTR":
+            if not self.evaluateShl(instr[1],instr[2],outBinArr,instr[0]):
+                sys.exit(1);
         elif instr[0].type=="DIV_INSTR":
             if not self.evaluateDiv(instr[1],instr[2],outBinArr,instr[0]):
                 sys.exit(1);
@@ -978,3 +1035,32 @@ class megaParser:
         #print(self.dataLabelsArray);
 
         return self.dsBaseAddress;
+
+    #
+    # preprocess includes
+    #
+
+    def preprocessIncludes(self,intxt):
+
+        resultingArray=[];
+
+        for l in intxt:
+            if l=="\n":
+                pass;
+            else: 
+                #l=l[:-1];
+                larr=l.split(" ");
+                if (larr[0]=="include"):
+                    if len(larr)!=2:
+                        print("Syntax error at include statement");
+                        raise genericException("Syntax error at include statement");
+                    else:
+                        fname=larr[1][:-1];
+                        with open (fname, "r") as myfile:
+                            includeText=myfile.readlines();
+                        for line in includeText:
+                            resultingArray.append(line);
+                else:
+                    resultingArray.append(l);
+
+        return resultingArray;

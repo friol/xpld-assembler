@@ -1,0 +1,337 @@
+
+#
+# attack of the 3D XPLDsions
+# 0x00500000 - rotation angle 8 bit
+# 0x00500001 - start of 8x2 32-bit points
+# 0x00500100 - fov
+#
+
+
+ORGCODE 0x0
+ORGDS 0x10000
+
+xpldtvLogo db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 240, 248, 255, 255, 126, 0, 31, 254, 0, 0, 6, 0, 0, 1, 255, 248, 255, 255, 126, 0, 31, 255, 0, 24, 12, 0, 0, 0, 255, 240, 255, 255, 126, 0, 31, 255, 128, 112, 12, 0, 0, 0, 127, 224, 255, 255, 126, 0, 31, 255, 192, 224, 24, 0, 0, 0, 63, 192, 252, 63, 126, 0, 31, 135, 225, 193, 16, 0, 0, 0, 31, 128, 252, 63, 126, 0, 31, 135, 230, 67, 32, 0, 0, 0, 31, 128, 252, 63, 126, 0, 31, 135, 224, 65, 160, 0, 0, 0, 31, 128, 255, 255, 126, 0, 31, 135, 224, 65, 224, 0, 0, 0, 63, 192, 255, 255, 126, 0, 31, 135, 224, 64, 192, 0, 0, 0, 127, 192, 255, 255, 127, 255, 159, 255, 192, 64, 192, 0, 0, 0, 127, 240, 252, 0, 127, 255, 159, 255, 128, 64, 128, 0, 0, 1, 255, 240, 252, 0, 127, 255, 159, 255, 0, 64, 0, 0, 0, 1, 249, 248, 252, 0, 127, 255, 159, 254, 0, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+cubePoints dd 1,1,4294967295, 4294967295,1,4294967295, 4294967295,4294967295,4294967295, 1,4294967295,4294967295, 1,1,1, 4294967295,1,1, 4294967295,4294967295,1, 1,4294967295,1
+linePoints db 0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7
+
+jmp @@mainProc
+
+include .\examples\starfield.xpld
+
+.preparePalette:
+ld8 [0x20000002],8
+ld32 [0x20000003],0xffffffff
+ld8 [0x20000002],7
+ld32 [0x20000003],0xffdddddd
+ld8 [0x20000002],6
+ld32 [0x20000003],0xffbbbbbb
+ld8 [0x20000002],5
+ld32 [0x20000003],0xff999999
+ld8 [0x20000002],4
+ld32 [0x20000003],0xff777777
+ld8 [0x20000002],3
+ld32 [0x20000003],0xff555555
+ld8 [0x20000002],2
+ld32 [0x20000003],0xff333333
+ld8 [0x20000002],1
+ld32 [0x20000003],0xff111111
+rts
+
+#
+# waitForRetrace
+# (c) friol 1999
+#
+
+.waitForRetrace:
+push r0
+@@wfrLoop:
+ld8 r0,[0x20000000]
+and r0,0x02
+cmp r0,0x02
+jnz @@wfrLoop
+pop r0
+rts
+
+.clearScreen:
+push r0
+ld r0,0x11000000
+@@clrscrCycle:
+ld8 [r0],0
+add r0,1
+cmp r0,0x11012c00
+jnz @@clrscrCycle
+pop r0
+rts
+
+#
+# plotpixel
+# r2=x, r3=y, r15=col
+#
+
+.plotpixel:
+push r4
+ld r4,r3
+mul r4,320
+add r4,r2
+add r4,0x11000000
+ld8 [r4],r15
+pop r4
+rts
+
+#
+#
+#
+
+.drawPoints:
+push r0
+push r2
+push r3
+
+ld r0,0x00500001
+
+@@plotCycle:
+ld32 r2,[r0]
+add r0,4
+ld32 r3,[r0] 
+add r0,4
+jsr plotpixel
+
+cmp r0,0x00500041
+jnz @@plotCycle
+
+pop r3
+pop r2
+pop r0
+rts
+
+#
+#
+#
+
+.drawLines:
+push r0
+push r1
+push r2
+push r3
+push r4
+push r5
+push r6
+push r7
+push r8
+push r9
+
+ld r8,linePoints
+ld r9,0
+
+@@drawLinesCycle:
+ld8 r6,[r8]
+add r8,1
+ld8 r7,[r8]
+add r8,1
+
+ld r0,0x00500001
+mul r6,8
+add r0,r6
+ld32 r2,[r0]
+add r0,4
+ld32 r3,[r0] 
+add r0,4
+
+ld r0,0x00500001
+mul r7,8
+add r0,r7
+ld32 r4,[r0]
+add r0,4
+ld32 r5,[r0] 
+add r0,4
+
+ld32 [0x20010101],r2
+ld32 [0x20010102],r3
+ld32 [0x20010103],r4
+ld32 [0x20010104],r5
+add r15,1
+ld8 [0x20010108],r15
+sub r15,1
+ld8 [0x20010100],2
+
+add r9,1
+cmp r9,12
+jnz @@drawLinesCycle
+
+pop r9
+pop r8
+pop r7
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+
+#
+#
+#
+
+.projectAndRotatePoints:
+push r0
+push r1
+push r2
+push r3
+push r4
+push r5
+push r6
+push r14
+
+ld r0,0
+ld r1,cubePoints
+ld r6,0x00500001
+
+@@processNextPoint:
+ld32 r2,[r1]
+add r1,4
+ld32 r3,[r1]
+add r1,4
+ld32 r4,[r1]
+add r1,4
+
+mul r2,256
+mul r3,256
+mul r4,256
+
+# r2,r3,r4 are x,y,z in 8 bit fixed point
+
+ld32 [0x20010101],r2
+ld32 [0x20010102],r3
+ld32 [0x20010103],r4
+
+ld8 r5,[0x00500000]
+ld r13,r15
+mul r13,8
+add r5,r13
+and r5,255
+
+ld8 [0x20010105],r5
+ld8 [0x20010106],0
+ld8 [0x20010107],r5
+#rotate
+ld8 [0x20010100],1
+
+ld r2,[0x20010101]
+ld r3,[0x20010102]
+ld r4,[0x20010103]
+
+ld r14,[0x500100]
+add r4,420
+
+ld32 [0x20010101],r2
+ld32 [0x20010102],r3
+ld32 [0x20010103],r4
+mul r14,16
+ld32 [0x20010104],r14
+# 2d project
+ld8 [0x20010100],0
+
+ld r2,[0x20010105]
+ld r3,[0x20010106]
+
+ld32 [r6],r2
+add r6,4
+ld32 [r6],r3
+add r6,4
+
+add r0,1
+cmp r0,8
+jnz @@processNextPoint
+
+pop r14
+pop r6
+pop r5
+pop r4
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+.incrementRotationAngle:
+push r0
+ld8 r0,[0x00500000]
+add r0,1
+and r0,255
+ld8 [0x00500000],r0
+pop r0
+rts
+
+#
+# load sprite 0 with xpld logo
+#
+
+.loadSprite0:
+push r0
+push r1
+push r2
+
+ld8 [0x20000100],1
+ld8 [0x20000101],112
+ld8 [0x20000102],16
+ld32 [0x20000104],210
+ld32 [0x20000108],215
+ld8 [0x20000118],8
+
+ld r0,224
+ld r1,xpldtvLogo
+@@fetchSpriteData:
+ld8 r2,[r1]
+ld8 [0x20000112],r2
+add r1,1
+sub r0,1
+cmp r0,0
+jnz @@fetchSpriteData
+
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# main
+#
+
+@@mainProc:
+
+ld8 [0x20000001],2
+jsr preparePalette
+ld8 [0x00500000],0
+jsr loadSprite0
+jsr initialize3dstars
+
+@@rotCycle:
+jsr waitForRetrace
+jsr clearScreen
+
+ld32 [0x00500100],480
+ld r15,0
+
+@@cubesInner:
+jsr projectAndPlotStarfield
+jsr projectAndRotatePoints
+jsr drawLines
+
+ld r14,[0x500100]
+sub r14,1
+ld32 [0x500100],r14
+
+add r15,1
+cmp r15,8
+jnz @@cubesInner
+
+jsr incrementRotationAngle
+jsr updateStars
+
+jmp @@rotCycle
+
+hlt
