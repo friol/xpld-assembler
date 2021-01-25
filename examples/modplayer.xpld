@@ -1,0 +1,229 @@
+
+#
+# mod player
+# 0x005f1000: start of pattern data
+# 0x005f0004: player status: 0 stopped, 1 playing current pattern
+# 0x005f0005: current playing row
+# 0x005f0006: (32-bit) ticks counter
+# 0x005f0a00: tempo 1-255 (byte)
+#
+
+dataFrequencyTable dd 1635,1732,1836,1945,2060,2183,2313,2450,2596,2750,2914,3087,3270,3465,3671,3889,4121,4366,4625,4900,5192,5500,5827,6174,6541,6930,7342,7779,8241,8731,9250,9800,10383,11001,11655,12348,13082,13860,14684,15557,16482,17462,18501,19601,20766,22001,23309,24696,26164,27720,29368,31114,32965,34925,37001,39202,41533,44002,46619,49391,52328,55440,58733,62229,65929,69849,74003,78403,83066,88005,93238,98782,104656,110879,117472,124458,131858,139699,148006,156807,166131,176010,186476,197564,209312,221758,234944,248915,263717,279398,296012,313614,332262,352019,372952,395128
+
+#
+# getCurrentInstrumentParams
+# r0 (input) instrument
+# r8 speed
+# r9 waveform+active
+# r10 attack
+# r11 decay
+# r12 sustain
+# r13 release
+#
+
+.getCurrentInstrumentParams:
+
+cmp r0,0
+jz @@instrument0
+cmp r0,1
+jz @@instrument1
+cmp r0,2
+jz @@instrument2
+cmp r0,3
+jz @@instrument3
+#default params
+ld r8,2500
+ld r9,9
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument0:
+ld r8,2500
+ld r9,3
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument1:
+ld r8,3000
+ld r9,9
+ld r10,10
+ld r11,10
+ld r12,60
+ld r13,20
+jmp @@endGetCurrInstr
+
+@@instrument2:
+ld r8,100000
+ld r9,5
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@instrument3:
+ld r8,2500
+ld r9,17
+ld r10,25
+ld r11,25
+ld r12,25
+ld r13,25
+jmp @@endGetCurrInstr
+
+@@endGetCurrInstr:
+rts
+
+#
+# playCurrentRow
+# if in playing status, and if tick counter is zero, play current row
+#
+
+.playCurrentRow:
+push r0
+push r1
+push r2
+push r3
+push r8
+push r9
+
+ld8 r0,[0x005f0004]
+cmp r0,1
+jnz @@exitPlayUpdate
+
+ld r0,[0x005f0006]
+cmp r0,0
+jnz @@exitPlayUpdate
+
+ld8 r0,[0x005f0005]
+ld r1,0x005f1000
+mul r0,12
+add r1,r0
+
+ld r3,0x30000000
+
+@@mixingCycle:
+ld8 r2,[r1]
+cmp r2,255
+jnz @@mixTheNote
+
+add r1,2
+jmp @@incMixingCycle
+
+@@mixTheNote:
+ld r0,dataFrequencyTable
+mul r2,4
+add r0,r2
+ld32 r2,[r0]
+div r2,100
+
+add r1,2
+ld8 r0,[r1]
+jsr getCurrentInstrumentParams
+
+add r3,7
+ld32 [r3],r8
+sub r3,1
+ld8 [r3],0x50
+sub r3,1
+ld32 [r3],r2
+sub r3,5
+ld8 [r3],r9
+
+@@incMixingCycle:
+add r1,2
+add r3,0x10
+
+cmp r3,0x30000030
+jnz @@mixingCycle
+
+@@exitPlayUpdate:
+pop r9
+pop r8
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+# incrementTicksIfPlaying
+#
+
+.incrementTicksIfPlaying:
+push r0
+push r1
+push r2
+push r3
+
+# load tempo in r2
+ld8 r2,[0x005f0a00]
+ld r3,256
+sub r3,r2
+shr r3,3
+
+ld8 r0,[0x005f0004]
+cmp r0,1
+jnz @@notPlayingNoIncrement
+
+ld r0,[0x005f0006]
+add r0,1
+cmp r0,r3
+jnz @@justStoreTicks
+
+# time to change row
+ld r0,0
+ld8 r1,[0x005f0005]
+add r1,1
+and r1,0x3f
+ld8 [0x005f0005],r1
+
+@@justStoreTicks:
+ld32 [0x005f0006],r0
+
+@@notPlayingNoIncrement:
+pop r3
+pop r2
+pop r1
+pop r0
+rts
+
+#
+#
+#
+
+.initModPlayer:
+push r0
+push r1
+push r2
+push r3
+
+ld32 [0x005f0004],1
+ld32 [0x005f0005],0
+ld32 [0x005f0006],0
+ld32 [0x005f0a00],90
+
+ld r0,modSongData
+ld r1,0
+ld r2,0x005f1000
+@@loadModDataCycle:
+ld8 r3,[r0]
+ld8 [r2],r3
+
+add r0,1
+add r1,1
+add r2,1
+
+cmp r1,768
+jnz @@loadModDataCycle
+
+pop r3
+pop r2
+pop r1
+pop r0
+rts
